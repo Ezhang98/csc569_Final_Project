@@ -1,0 +1,29 @@
+cortex: https://github.com/cortexlabs/cortex
+
+https://docs.huihoo.com/go/fast-and-scalable-machine-learning-with-golang.pdf
+
+http://www.fodop.com/ar-1002 
+
+https://github.com/sjwhitworth/golearn
+
+https://github.com/josephmisiti/awesome-machine-learning#general-purpose-machine-learning-8
+
+http://yann.lecun.com/exdb/mnist/
+
+
+User Input
+- path to data file
+- specify which models to run and hyperparameter range
+    - some sort of struct
+    
+golearn
+  - knn
+  - gradient descent
+  - linear SVC
+  - general NN
+  - decision tree
+
+
+paper and implementation
+  aim for tuesday november 24
+  if not really try for november 30th
