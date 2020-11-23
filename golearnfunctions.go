@@ -36,47 +36,51 @@ import{
 	"github.com/sjwhitworth/golearn/knn"
 }
 
-func main() {
-	f, err := os.Open("t10k-images.idx3-ubyte")
+// func main() {
+// 	f, err := os.Open("t10k-images.idx3-ubyte")
+// 	if err != nil {
+// 			fmt.Println(err)
+// 			return
+// 	}
+// 	defer f.Close()
+// 	data := make([]byte, 4096)
+// }
+
+
+
+func knn(datafile string) {
+	// Load in a dataset, with headers. Header attributes will be stored.
+	// Think of instances as a Data Frame structure in R or Pandas.
+	// You can also create instances from scratch.
+	rawData, err := base.ParseCSVToInstances(datafile, false)
 	if err != nil {
-			fmt.Println(err)
-			return
+		panic(err)
 	}
-	defer f.Close()
-	data := make([]byte, 4096)
+
+	// Print a pleasant summary of your data.
+	fmt.Println(rawData)
+
+	//Initialises a new KNN classifier
+	cls := knn.NewKnnClassifier("euclidean", "linear", 2)
+
+	//Do a training-test split
+	trainData, testData := base.InstancesTrainTestSplit(rawData, 0.50)
+	cls.Fit(trainData)
+
+	//Calculates the Euclidean distance and returns the most popular label
+	predictions, err := cls.Predict(testData)
+	if err != nil {
+		panic(err)
+	}
+
+	// Prints precision/recall metrics
+	confusionMat, err := evaluation.GetConfusionMatrix(testData, predictions)
+	if err != nil {
+		panic(fmt.Sprintf("Unable to get confusion matrix: %s", err.Error()))
+	}
+	fmt.Println(evaluation.GetSummary(confusionMat))
 }
 
-
-
-// func main() {
-// 	// Load in a dataset, with headers. Header attributes will be stored.
-// 	// Think of instances as a Data Frame structure in R or Pandas.
-// 	// You can also create instances from scratch.
-// 	rawData, err := base.ParseCSVToInstances("datasets/iris.csv", false)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-
-// 	// Print a pleasant summary of your data.
-// 	fmt.Println(rawData)
-
-// 	//Initialises a new KNN classifier
-// 	cls := knn.NewKnnClassifier("euclidean", "linear", 2)
-
-// 	//Do a training-test split
-// 	trainData, testData := base.InstancesTrainTestSplit(rawData, 0.50)
-// 	cls.Fit(trainData)
-
-// 	//Calculates the Euclidean distance and returns the most popular label
-// 	predictions, err := cls.Predict(testData)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-
-// 	// Prints precision/recall metrics
-// 	confusionMat, err := evaluation.GetConfusionMatrix(testData, predictions)
-// 	if err != nil {
-// 		panic(fmt.Sprintf("Unable to get confusion matrix: %s", err.Error()))
-// 	}
-// 	fmt.Println(evaluation.GetSummary(confusionMat))
-// }
+func main() {
+	knn("datasets/iris.csv")
+}
