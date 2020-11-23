@@ -1,4 +1,5 @@
 // Group Members: Evan Zhang, Alexander Garcia and Christina Monahan
+// Distributed System for Tuning Hyperparameters of Neural Networks
 // PAXOS election, consensus,and recovery algorithms
 
 package main
@@ -6,11 +7,11 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"iio/ioutil"
 	"os"
-	"time"
 	"strconv"
-	"io/ioutil"
 	"strings"
+	"time"
 )
 
 // content_types: prepare 0, promise 1, propose 2, accept 3, election 4
@@ -23,46 +24,46 @@ type msg struct {
 
 // channels
 type buffer struct {
-	id int
-	buf map[int] chan msg
+	id  int
+	buf map[int]chan msg
 }
 
 type Command struct {
-	id          int
-	name        string
-	arg1        string
+	id   int
+	name string
+	arg1 string
 }
 
 type Node struct {
-	id          	int
-	position  	    string
-	stored      	int
-	commitLog		[]Command
-	phone       	*buffer
-	hbtable			*[][]int64
-	hb1			    []chan [][]int64
-	hb2			    []chan [][]int64
-	backup			*os.File
+	id        int
+	position  string
+	stored    int
+	commitLog []Command
+	phone     *buffer
+	hbtable   *[][]int64
+	hb1       []chan [][]int64
+	hb2       []chan [][]int64
+	backup    *os.File
 }
 
 // System of channels for communication
 func makeNetwork(length int) *buffer {
 	phone := buffer{buf: make(map[int]chan msg, 0)}
-	for i:=0 ; i < length; i++ {
+	for i := 0; i < length; i++ {
 		phone.buf[i] = make(chan msg, 1024)
 	}
 	return &phone
 }
 
 // sending channel
-func (phone *buffer) send (m msg){
+func (phone *buffer) send(m msg) {
 	phone.buf[m.to] <- m
 }
 
 // receive channel
-func (phone *buffer) receive (id int) msg {
-	select{
-	case reply := <- phone.buf[id]:
+func (phone *buffer) receive(id int) msg {
+	select {
+	case reply := <-phone.buf[id]:
 		return reply
 	case <-time.After(100 * time.Millisecond):
 		return msg{content_type: -1}
@@ -72,7 +73,7 @@ func (phone *buffer) receive (id int) msg {
 // run proposer function to run consensus
 func (n *Node) runProposer(numNodes int, input chan string) {
 	select {
-	case text := <- input:
+	case text := <-input:
 		n = consensus(n, text, numNodes)
 	default:
 	}
@@ -106,7 +107,7 @@ func (n *Node) runAcceptor(count int, numNodes int) int {
 					lowest = resp.from
 				}
 			}
-			if count == 20 || count2 == numNodes - 1 {
+			if count == 20 || count2 == numNodes-1 {
 				break
 			}
 		}
@@ -136,7 +137,7 @@ func (n *Node) runAcceptor(count int, numNodes int) int {
 			resp.id = val + 1
 		}
 		m2 := msg{from: n.id, to: m.from, cmd: resp, content_type: 1}
-		
+
 		n.phone.send(m2)
 	} else if m.content_type == 4 {
 		count2++
@@ -161,7 +162,7 @@ func (n *Node) runAcceptor(count int, numNodes int) int {
 					lowest = resp.from
 				}
 			}
-			if count == 20 || count2 == numNodes - 1 {
+			if count == 20 || count2 == numNodes-1 {
 				break
 			}
 		}
@@ -171,7 +172,7 @@ func (n *Node) runAcceptor(count int, numNodes int) int {
 			return 0
 		}
 	}
-	if m.content_type == 3{
+	if m.content_type == 3 {
 		n.commitToLog(c)
 	}
 	return 0
@@ -201,11 +202,11 @@ func (n *Node) launch(num int, chan1 chan string, input chan string, killhb chan
 			count = n.runAcceptor(count, num)
 		}
 		select {
-		case reply := <- chan1:
+		case reply := <-chan1:
 			if reply == "exit" {
 				break
 			}
-		default: 
+		default:
 		}
 	}
 	n.backup.Close()
@@ -219,7 +220,7 @@ func consensus(proposer *Node, command string, numNodes int) *Node {
 		accepted := make([]bool, numNodes)
 		largest := 0
 		for j := 0; j < numNodes; j++ {
-			if proposer.id == j{
+			if proposer.id == j {
 				continue
 			}
 			// prepare request next value
@@ -255,7 +256,7 @@ func consensus(proposer *Node, command string, numNodes int) *Node {
 	var c Command
 	for j := 0; j < numNodes; j++ {
 		// accept request next value
-		if proposer.id == j{
+		if proposer.id == j {
 			continue
 		}
 		c.id = proposer.stored
@@ -312,9 +313,9 @@ func main() {
 	// initialize nodes
 	nodes := make([]*Node, numNodes)
 
-	var hb1chan = make([]chan [][]int64, 8)		// heartbeat channels to neighbors for read
+	var hb1chan = make([]chan [][]int64, 8) // heartbeat channels to neighbors for read
 	var hb2chan = make([]chan [][]int64, 8)
-	
+
 	// initialize heartbeat tables
 	for i := 0; i < 8; i++ {
 		hb1chan[i] = make(chan [][]int64, 1024)
@@ -329,8 +330,8 @@ func main() {
 	phone := makeNetwork(len(nodes))
 
 	//killNodesChan and killhb channels to be used with kill calls
-	killNodesChan := make([] chan string, numNodes)
-	killhb := make([] chan string, numNodes)
+	killNodesChan := make([]chan string, numNodes)
+	killhb := make([]chan string, numNodes)
 	input := make(chan string, 1024)
 	// start all nodes
 	for i := 0; i < numNodes; i++ {
@@ -341,13 +342,13 @@ func main() {
 	}
 
 	// function to accept input from user and will kill goRoutines when exit is typed
-	go func (){
+	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
 		fmt.Print("> ")
 		for scanner.Scan() {
 			text := scanner.Text()
 			if text == "exit" {
-				for i := 0; i < numNodes; i++ {  
+				for i := 0; i < numNodes; i++ {
 					killNodesChan[i] <- "exit"
 					killhb[i] <- "exit"
 				}
@@ -359,7 +360,7 @@ func main() {
 			fmt.Print("> ")
 		}
 	}()
-	
+
 	// killLists to simulate a hardware failure by killing nodes
 	nodeKillList := make([][]int, 20)
 	index := 0
@@ -383,7 +384,7 @@ func main() {
 			killhb[nodeKillList[next][0]] <- "exit"
 		}
 		// restart node at nkl[next][0] after 10 cycles
-		if nodeKillList[next][1] + 5 == counter {
+		if nodeKillList[next][1]+5 == counter {
 			i := nodeKillList[next][0]
 			commitLog, lastStored := catchUpCommands(i)
 			nodes[i] = createNode(i, "acceptor", lastStored, commitLog, hb1chan, hb2chan)
@@ -402,7 +403,7 @@ func main() {
 }
 
 // catchUpCommands to restore a failed node to its previous state
-func catchUpCommands(id int) ([] Command, int){
+func catchUpCommands(id int) ([]Command, int) {
 	commands := make([]Command, 1024)
 	stored := 0
 	filename := fmt.Sprintf("backup%d", id)
@@ -411,8 +412,8 @@ func catchUpCommands(id int) ([] Command, int){
 		fmt.Println(err)
 	}
 	lines := strings.Split(string(content), "\n")
-	
-	for i := 0; i < len(lines) - 1; i++ {
+
+	for i := 0; i < len(lines)-1; i++ {
 		x := strings.Split(lines[i], " ")
 		if len(x) == 0 {
 			continue
@@ -423,11 +424,11 @@ func catchUpCommands(id int) ([] Command, int){
 		c.arg1 = x[2]
 		commands[c.id] = c
 		stored = c.id
-	} 
+	}
 	return commands, stored
 }
 
-// update heartbeat table 
+// update heartbeat table
 func updateTable(index int, hbtableOG *[][]int64, counter int, hb1 []chan [][]int64, hb2 []chan [][]int64, numNodes int) {
 	hbtable := *hbtableOG
 	next := index + 1
@@ -435,7 +436,7 @@ func updateTable(index int, hbtableOG *[][]int64, counter int, hb1 []chan [][]in
 	if prev < 0 {
 		prev = numNodes - 1
 	}
-	if next > numNodes - 1 {
+	if next > numNodes-1 {
 		next = 0
 	}
 
@@ -449,16 +450,16 @@ func updateTable(index int, hbtableOG *[][]int64, counter int, hb1 []chan [][]in
 		neighbor2[i] = make([]int64, 2)
 		neighbor2[i][0] = hbtable[i][0]
 		neighbor2[i][1] = hbtable[i][1]
-	
+
 	}
 	loop2 := true
-	if counter % 5 == 0 {
+	if counter%5 == 0 {
 		for loop2 {
 			select {
-				case neighbor1_1 := <-hb1[next]:
-					neighbor1 = neighbor1_1
-				default:
-					loop2 = false
+			case neighbor1_1 := <-hb1[next]:
+				neighbor1 = neighbor1_1
+			default:
+				loop2 = false
 			}
 		}
 		for i := 0; i < numNodes; i++ {
@@ -466,7 +467,7 @@ func updateTable(index int, hbtableOG *[][]int64, counter int, hb1 []chan [][]in
 			(*hbtableOG)[i][1] = max(neighbor1[i][1], hbtable[i][1])
 		}
 		loop2 = true
-		
+
 		for loop2 {
 			select {
 			case neighbor2_1 := <-hb2[prev]:
@@ -480,15 +481,15 @@ func updateTable(index int, hbtableOG *[][]int64, counter int, hb1 []chan [][]in
 			(*hbtableOG)[i][1] = max(neighbor2[i][1], hbtable[i][1])
 		}
 	}
-	
+
 	now := time.Now().Unix() // current local time
 	(*hbtableOG)[index][0] = hbtable[index][0] + 1
 	(*hbtableOG)[index][1] = now
-	
+
 	// send table
 	hb1[index] <- *hbtableOG
 	hb2[index] <- *hbtableOG
-	
+
 }
 
 // heartbeat function
@@ -499,11 +500,10 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, hbtable *[][]i
 		updateTable(k, hbtable, counter, hb1, hb2, numNodes)
 		counter++
 		select {
-		case reply := <- noPulse:
+		case reply := <-noPulse:
 			if reply == "exit" {
 				break
 			}
 		}
 	}
 }
-
