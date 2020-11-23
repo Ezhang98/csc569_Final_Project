@@ -28,13 +28,14 @@
 // 60000 28x28 matrices of unsigned ints
 // Happy hacking.
 
-package go_machineLearning
+package main
 
-import{
+import 
+(
 	"github.com/sjwhitworth/golearn/base"
 	"github.com/sjwhitworth/golearn/evaluation"
 	"github.com/sjwhitworth/golearn/knn"
-}
+)
 
 // func main() {
 // 	f, err := os.Open("t10k-images.idx3-ubyte")
@@ -48,11 +49,11 @@ import{
 
 
 
-func knn(datafile string) {
+func knn() {
 	// Load in a dataset, with headers. Header attributes will be stored.
 	// Think of instances as a Data Frame structure in R or Pandas.
 	// You can also create instances from scratch.
-	rawData, err := base.ParseCSVToInstances(datafile, false)
+	rawData, err := base.ParseCSVToInstances("datasets/iris.csv", false)
 	if err != nil {
 		panic(err)
 	}
@@ -82,5 +83,5 @@ func knn(datafile string) {
 }
 
 func main() {
-	knn("datasets/iris.csv")
+	knn()
 }

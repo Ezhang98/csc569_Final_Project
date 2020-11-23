@@ -28,10 +28,18 @@ type buffer struct {
 	buf map[int]chan msg
 }
 
+type Model struct {
+	datafile string
+	hyperparameters []float64
+	modelType string
+}
+
+
 type Command struct {
 	id   int
 	name string
-	arg1 string
+	models []Model
+	configFile string
 }
 
 type Node struct {
