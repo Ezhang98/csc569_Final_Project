@@ -1,6 +1,6 @@
 // Group Members: Evan Zhang, Alexander Garcia and Christina Monahan
 // Distributed System for Tuning Hyperparameters of Neural Networks
-// PAXOS election, consensus,and recovery algorithms
+// PAXOS election, consensus, and recovery algorithms
 
 package main
 
@@ -29,17 +29,17 @@ type buffer struct {
 }
 
 type Model struct {
-	datafile string
+	datafile        string
 	hyperparameters []float64
-	modelType string
+	modelType       string
 }
 
-
 type Command struct {
-	id   int
-	name string
-	models []Model
+	id         int
+	name       string
+	models     []Model
 	configFile string
+	modelchan  []chan string
 }
 
 type Node struct {
@@ -190,7 +190,7 @@ func (n *Node) runAcceptor(count int, numNodes int) int {
 func (n *Node) commitToLog(c Command) {
 	if n.commitLog[c.id].name == "" {
 		n.commitLog[c.id] = c
-		logMsg := fmt.Sprintf("%d %s %s\n", c.id, c.name, c.arg1)
+		logMsg := fmt.Sprintf("%d %s %s\n", c.id, c.name, c.models)
 		_, err := n.backup.WriteString(logMsg)
 		if err != nil {
 			fmt.Println(err)
@@ -240,7 +240,7 @@ func consensus(proposer *Node, command string, numNodes int) *Node {
 				largest = c.id
 			}
 			c.name = "hash"
-			c.arg1 = command
+			c.models = command
 			m := msg{from: proposer.id, to: j, cmd: c, content_type: 0}
 			proposer.phone.send(m)
 			// accept request next value
@@ -269,7 +269,7 @@ func consensus(proposer *Node, command string, numNodes int) *Node {
 		}
 		c.id = proposer.stored
 		c.name = "hash"
-		c.arg1 = command
+		c.models = command
 		m2 := msg{from: proposer.id, to: j, cmd: c, content_type: 3}
 		proposer.phone.send(m2)
 	}
@@ -323,6 +323,7 @@ func main() {
 
 	var hb1chan = make([]chan [][]int64, 8) // heartbeat channels to neighbors for read
 	var hb2chan = make([]chan [][]int64, 8)
+	var modelchan = make([]chan string) // channel to send models
 
 	// initialize heartbeat tables
 	for i := 0; i < 8; i++ {
@@ -429,7 +430,7 @@ func catchUpCommands(id int) ([]Command, int) {
 		var c Command
 		c.id, _ = strconv.Atoi(x[0])
 		c.name = x[1]
-		c.arg1 = x[2]
+		c.models = x[2]
 		commands[c.id] = c
 		stored = c.id
 	}
