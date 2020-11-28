@@ -7,7 +7,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"iio/ioutil"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
