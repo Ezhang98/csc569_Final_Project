@@ -304,6 +304,17 @@ func max(x, y int64) int64 {
 	return y
 }
 
+// function to distribute model to be trained on acceptor nodes
+func distroModel(acceptor *Node, Command string){
+	for j := 0; j < numNodes; j++ {
+		models[j] := make([]Model, 1024)
+		modelChan <- models[j]
+		if acceptor.id == j {
+			<- modelChan
+		}
+	}
+}
+
 func main() {
 	// check command line arguments
 	numNodes := 0
