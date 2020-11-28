@@ -199,20 +199,20 @@ func makeToolbar() ui.Control {
 		1, 1, 1, 1,
 		true, ui.AlignFill, false, ui.AlignFill)
 
-	button = ui.NewButton("Label Path")
-	entry = ui.NewEntry()
-	entry.SetReadOnly(true)
-	button.OnClicked(func(*ui.Button) {
+	button1 := ui.NewButton("Label Path")
+	entry1 := ui.NewEntry()
+	entry1.SetReadOnly(true)
+	button1.OnClicked(func(*ui.Button) {
 		filename := ui.OpenFile(mainwin)
 		if filename == "" {
 			filename = "(cancelled)"
 		}
-		entry.SetText(filename)
+		entry1.SetText(filename)
 	})
-	grid.Append(button,
+	grid.Append(button1,
 		0, 2, 1, 1,
 		false, ui.AlignFill, false, ui.AlignFill)
-	grid.Append(entry,
+	grid.Append(entry1,
 		1, 2, 1, 1,
 		true, ui.AlignFill, false, ui.AlignFill)
 
