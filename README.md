@@ -1,5 +1,6 @@
 # csc569_Final_Project
 Distributed System for Tuning Hyperparameters of Neural Networks
+
 Group Members: Evan Zhang, Alexander Garcia and Christina Monahan
 PAXOS election, consensus, and recovery algorithms
 
