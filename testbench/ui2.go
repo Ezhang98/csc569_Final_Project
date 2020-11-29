@@ -1,51 +1,49 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
 
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
 )
 
+type UIWindow struct {
+	TrainData  string
+	TestData   string
+	ModelCount int
+	Models     []ModelConfig
+}
+
+type ModelConfig struct {
+	ModelID int
+	Name    string
+	Model1Params
+	Model2Params
+	Model3Params
+}
+
+type Model1Params struct {
+	Activation int
+	Nodes      int
+}
+
+type Model2Params struct {
+	Layers       int
+	LearningRate string
+}
+
+type Model3Params struct {
+	Trees    int
+	MaxDepth int
+}
+
 var mainwin *ui.Window
 var modelCount int = 0
 var models []ui.Control = make([]ui.Control, 5)
+var windowData UIWindow
 
-func makeBasicControlsPage() ui.Control {
-	vbox := ui.NewVerticalBox()
-	vbox.SetPadded(true)
-
-	hbox := ui.NewHorizontalBox()
-	hbox.SetPadded(true)
-	vbox.Append(hbox, false)
-
-	hbox.Append(ui.NewButton("Button"), false)
-	hbox.Append(ui.NewCheckbox("Checkbox"), false)
-
-	vbox.Append(ui.NewLabel("This is a label. Right now, labels can only span one line."), false)
-
-	vbox.Append(ui.NewHorizontalSeparator(), false)
-
-	group := ui.NewGroup("Entries")
-	group.SetMargined(true)
-	vbox.Append(group, true)
-
-	group.SetChild(ui.NewNonWrappingMultilineEntry())
-
-	entryForm := ui.NewForm()
-	entryForm.SetPadded(true)
-	group.SetChild(entryForm)
-
-	entryForm.Append("Entry", ui.NewEntry(), false)
-	entryForm.Append("Password Entry", ui.NewPasswordEntry(), false)
-	entryForm.Append("Search Entry", ui.NewSearchEntry(), false)
-	entryForm.Append("Multiline Entry", ui.NewMultilineEntry(), true)
-	entryForm.Append("Multiline Entry No Wrap", ui.NewNonWrappingMultilineEntry(), true)
-
-	return vbox
-}
-
-func makeModel() ui.Control {
+func makeModelParam(m ModelConfig) ui.Control {
 	hbox := ui.NewHorizontalBox()
 	hbox.SetPadded(true)
 
@@ -60,96 +58,283 @@ func makeModel() ui.Control {
 		0, 0, 1, 1,
 		false, ui.AlignFill, false, ui.AlignFill)
 
+	initial := 0
+	if m.Name == "Model 2" {
+		initial = 1
+	}
+	if m.Name == "Model 3" {
+		initial = 2
+	}
 	alignment := ui.NewCombobox()
 	// note that the items match with the values of the uiDrawTextAlign values
 	alignment.Append("Model 1")
 	alignment.Append("Model 2")
 	alignment.Append("Model 3")
-	alignment.SetSelected(0)
+	alignment.SetSelected(initial)
 	alignment.OnSelected(func(*ui.Combobox) {
 		s := alignment.Selected()
 		if s == 0 {
+			windowData.Models[m.ModelID].Name = "Model 1"
 			hbox1 := ui.NewHorizontalBox()
 			hbox1.SetPadded(true)
 			grid.Append(hbox1,
 				0, 1, 1, 1,
 				false, ui.AlignFill, false, ui.AlignFill)
 
+			activation := ui.NewCombobox()
+			// note that the items match with the values of the uiDrawTextAlign values
+			activation.Append("tanh")
+			activation.Append("sigmoid")
+			activation.Append("relu")
+			activation.SetSelected(0)
+			activation.OnSelected(func(*ui.Combobox) {
+				windowData.Models[m.ModelID].Activation = activation.Selected()
+			})
+			// activation and nodes
 			form1 := ui.NewForm()
 			form1.SetPadded(true)
 			hbox1.Append(form1, false)
-			form1.Append("activation", ui.NewEntry(), false)
+			form1.Append("activation", activation, false)
+
+			nodes := ui.NewSpinbox(0, 100)
+			nodes.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].Nodes = nodes.Value()
+			})
 
 			form2 := ui.NewForm()
 			form2.SetPadded(true)
 			hbox1.Append(form2, false)
-			form2.Append("activation", ui.NewSpinbox(0, 100), false)
 
+			form2.Append("numNodes", nodes, false)
 		} else if s == 1 {
+			windowData.Models[m.ModelID].Name = "Model 2"
 			hbox1 := ui.NewHorizontalBox()
 			hbox1.SetPadded(true)
 			grid.Append(hbox1,
 				0, 1, 1, 1,
 				false, ui.AlignFill, false, ui.AlignFill)
+			// layers and learning rate
+
+			layers := ui.NewSpinbox(0, 100)
+			layers.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].Layers = layers.Value()
+			})
 
 			form2 := ui.NewForm()
 			form2.SetPadded(true)
 			hbox1.Append(form2, false)
-			form2.Append("activation", ui.NewSpinbox(0, 100), false)
+			form2.Append("numLayers", layers, false)
+
+			lrate := ui.NewEntry()
+			lrate.SetText("0.1")
+			windowData.Models[m.ModelID].LearningRate = "0.1"
+			lrate.OnChanged(func(*ui.Entry) {
+				windowData.Models[m.ModelID].LearningRate = lrate.Text()
+			})
 
 			form1 := ui.NewForm()
 			form1.SetPadded(true)
 			hbox1.Append(form1, false)
-			form1.Append("activation", ui.NewEntry(), false)
-
+			form1.Append("learning rate", lrate, false)
 		} else {
+			windowData.Models[m.ModelID].Name = "Model 3"
 			hbox1 := ui.NewHorizontalBox()
 			hbox1.SetPadded(true)
 			grid.Append(hbox1,
 				0, 1, 1, 1,
 				false, ui.AlignFill, false, ui.AlignFill)
+			// numTrees and max depth
+			numTrees := ui.NewSpinbox(0, 100)
+			numTrees.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].Trees = numTrees.Value()
+			})
+
+			form1 := ui.NewForm()
+			form1.SetPadded(true)
+			hbox1.Append(form1, false)
+			form1.Append("numTrees", numTrees, false)
+
+			maxDepth := ui.NewSpinbox(0, 100)
+			maxDepth.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].MaxDepth = maxDepth.Value()
+			})
 
 			form2 := ui.NewForm()
 			form2.SetPadded(true)
 			hbox1.Append(form2, false)
-			form2.Append("activation", ui.NewSpinbox(0, 100), false)
+			form2.Append("maxDepth", maxDepth, false)
 		}
 	})
+
+	if m.Name == "Model 1" {
+		hbox1 := ui.NewHorizontalBox()
+		hbox1.SetPadded(true)
+		grid.Append(hbox1,
+			0, 1, 1, 1,
+			false, ui.AlignFill, false, ui.AlignFill)
+
+		activation := ui.NewCombobox()
+		// note that the items match with the values of the uiDrawTextAlign values
+		activation.Append("tanh")
+		activation.Append("sigmoid")
+		activation.Append("relu")
+		activation.SetSelected(windowData.Models[m.ModelID].Activation)
+		activation.OnSelected(func(*ui.Combobox) {
+			windowData.Models[m.ModelID].Activation = activation.Selected()
+		})
+		// activation and nodes
+		form1 := ui.NewForm()
+		form1.SetPadded(true)
+		hbox1.Append(form1, false)
+		form1.Append("activation", activation, false)
+
+		nodes := ui.NewSpinbox(0, 100)
+		nodes.SetValue(windowData.Models[m.ModelID].Nodes)
+		nodes.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].Nodes = nodes.Value()
+		})
+		form2 := ui.NewForm()
+		form2.SetPadded(true)
+		hbox1.Append(form2, false)
+		form2.Append("numNodes", nodes, false)
+	} else if m.Name == "Model 2" {
+		hbox1 := ui.NewHorizontalBox()
+		hbox1.SetPadded(true)
+		grid.Append(hbox1,
+			0, 1, 1, 1,
+			false, ui.AlignFill, false, ui.AlignFill)
+		// layers and learning rate
+		layers := ui.NewSpinbox(0, 100)
+		layers.SetValue(windowData.Models[m.ModelID].Layers)
+		layers.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].Layers = layers.Value()
+		})
+
+		form2 := ui.NewForm()
+		form2.SetPadded(true)
+		hbox1.Append(form2, false)
+		form2.Append("numLayers", layers, false)
+
+		lrate := ui.NewEntry()
+		lrate.SetText(windowData.Models[m.ModelID].LearningRate)
+		lrate.OnChanged(func(*ui.Entry) {
+			windowData.Models[m.ModelID].LearningRate = lrate.Text()
+		})
+
+		form1 := ui.NewForm()
+		form1.SetPadded(true)
+		hbox1.Append(form1, false)
+		form1.Append("learning rate", lrate, false)
+	} else if m.Name == "Model 3" {
+		hbox1 := ui.NewHorizontalBox()
+		hbox1.SetPadded(true)
+		grid.Append(hbox1,
+			0, 1, 1, 1,
+			false, ui.AlignFill, false, ui.AlignFill)
+		// numTrees and max depth
+		numTrees := ui.NewSpinbox(0, 100)
+		numTrees.SetValue(windowData.Models[m.ModelID].Trees)
+		numTrees.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].Trees = numTrees.Value()
+		})
+
+		form1 := ui.NewForm()
+		form1.SetPadded(true)
+		hbox1.Append(form1, false)
+		form1.Append("numTrees", numTrees, false)
+
+		maxDepth := ui.NewSpinbox(0, 100)
+		maxDepth.SetValue(windowData.Models[m.ModelID].MaxDepth)
+		maxDepth.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].MaxDepth = maxDepth.Value()
+		})
+
+		form2 := ui.NewForm()
+		form2.SetPadded(true)
+		hbox1.Append(form2, false)
+		form2.Append("maxDepth", maxDepth, false)
+	}
+
 	form.Append("Alignment", alignment, false)
 
 	return hbox
 }
 
-func makeToolbar() ui.Control {
-	vbox := ui.NewVerticalBox()
-	vbox.SetPadded(true)
-
+func generateFromState() *ui.Grid {
 	grid := ui.NewGrid()
 	grid.SetPadded(true)
 
-	vbox.Append(grid, false)
+	button := ui.NewButton("Training Data")
+	entry := ui.NewEntry()
+	entry.SetReadOnly(true)
+	entry.SetText(windowData.TrainData)
+	button.OnClicked(func(*ui.Button) {
+		filename := ui.OpenFile(mainwin)
+		if filename == "" {
+			filename = "(cancelled)"
+		}
+		entry.SetText(filename)
+		windowData.TrainData = filename
+	})
+	grid.Append(button,
+		0, 0, 1, 1,
+		false, ui.AlignFill, false, ui.AlignFill)
+	grid.Append(entry,
+		1, 0, 1, 1,
+		true, ui.AlignFill, false, ui.AlignFill)
+
+	button1 := ui.NewButton("Test Data")
+	entry1 := ui.NewEntry()
+	entry1.SetReadOnly(true)
+	entry1.SetText(windowData.TestData)
+	button1.OnClicked(func(*ui.Button) {
+		filename := ui.OpenFile(mainwin)
+		if filename == "" {
+			filename = "(cancelled)"
+		}
+		entry1.SetText(filename)
+		windowData.TestData = filename
+	})
+	grid.Append(button1,
+		0, 1, 1, 1,
+		false, ui.AlignFill, false, ui.AlignFill)
+	grid.Append(entry1,
+		1, 1, 1, 1,
+		true, ui.AlignFill, false, ui.AlignFill)
+	modelCount = windowData.ModelCount
+	for i := 0; i < windowData.ModelCount; i++ {
+		m := makeModelParam(windowData.Models[i])
+		grid.Append(m,
+			0, i+2, 2, 1,
+			true, ui.AlignFill, false, ui.AlignFill)
+	}
+	return grid
+}
+
+func makeToolbar2() ui.Control {
+	vbox := ui.NewVerticalBox()
+	vbox.SetPadded(true)
 
 	msggrid := ui.NewGrid()
 	msggrid.SetPadded(true)
-	grid.Append(msggrid,
-		0, 0, 2, 1,
-		false, ui.AlignCenter, false, ui.AlignCenter)
+	vbox.Append(msggrid, false)
 
-	modelgrid := ui.NewGrid()
-	modelgrid.SetPadded(true)
-	vbox.Append(modelgrid, false)
-	// for loop populating model list
-	for i := 0; i < modelCount; i++ {
-		modelgrid.Append(models[i],
-			0, i, 1, 1,
-			false, ui.AlignFill, false, ui.AlignFill)
-	}
+	grid := ui.NewGrid()
+	grid.SetPadded(true)
+	vbox.Append(grid, false)
 
 	button := ui.NewButton("Import Config")
 	button.OnClicked(func(*ui.Button) {
-		ui.MsgBox(mainwin,
-			"This is a normal message box.",
-			"More detailed information can be shown here.")
+		filename := ui.OpenFile(mainwin)
+		if filename != "" {
+			file, _ := ioutil.ReadFile(filename)
+			temp := UIWindow{}
+			_ = json.Unmarshal([]byte(file), &temp)
+			windowData = temp
+			vbox.Delete(1)
+			grid = generateFromState()
+			vbox.Append(grid, false)
+		}
 	})
 	msggrid.Append(button,
 		0, 0, 1, 1,
@@ -157,15 +342,16 @@ func makeToolbar() ui.Control {
 	button = ui.NewButton("Add Model")
 	button.OnClicked(func(*ui.Button) {
 		if modelCount < 5 {
-			model := makeModel()
-			fmt.Println(model)
-			models[modelCount] = model
-			fmt.Println(models[modelCount])
-			modelgrid.Append(models[modelCount],
-				0, modelCount, 1, 1,
-				false, ui.AlignFill, false, ui.AlignFill)
-			fmt.Println(modelCount)
+			var m ModelConfig
+			m.Name = ""
+			m.ModelID = modelCount
+			windowData.Models[modelCount] = m
+			model := makeModelParam(m)
+			grid.Append(model,
+				0, modelCount+2, 2, 1,
+				true, ui.AlignFill, false, ui.AlignFill)
 			modelCount++
+			windowData.ModelCount++
 		}
 	})
 	msggrid.Append(button,
@@ -174,15 +360,39 @@ func makeToolbar() ui.Control {
 
 	button = ui.NewButton("Save Config")
 	button.OnClicked(func(*ui.Button) {
-		ui.MsgBoxError(mainwin,
-			"This message box describes an error.",
-			"More detailed information can be shown here.")
+		filename := ui.SaveFile(mainwin)
+		file, _ := json.MarshalIndent(windowData, "", " ")
+		_ = ioutil.WriteFile(filename, file, 0644)
+	})
+	msggrid.Append(button,
+		2, 0, 1, 1,
+		false, ui.AlignFill, false, ui.AlignFill)
+
+	button = ui.NewButton("Clear All")
+	button.OnClicked(func(*ui.Button) {
+		temp := UIWindow{}
+		windowData = temp
+		windowData.Models = make([]ModelConfig, 5)
+		windowData.ModelCount = 0
+		vbox.Delete(1)
+		grid = generateFromState()
+		vbox.Append(grid, false)
 	})
 	msggrid.Append(button,
 		3, 0, 1, 1,
 		false, ui.AlignFill, false, ui.AlignFill)
 
-	button = ui.NewButton("Data Path")
+	button = ui.NewButton("Run Models")
+	button.OnClicked(func(*ui.Button) {
+		ui.MsgBoxError(mainwin,
+			"This message box describes an error.",
+			"More detailed information can be shown here.")
+	})
+	msggrid.Append(button,
+		4, 0, 1, 1,
+		false, ui.AlignFill, false, ui.AlignFill)
+
+	button = ui.NewButton("Training Data")
 	entry := ui.NewEntry()
 	entry.SetReadOnly(true)
 	button.OnClicked(func(*ui.Button) {
@@ -193,13 +403,13 @@ func makeToolbar() ui.Control {
 		entry.SetText(filename)
 	})
 	grid.Append(button,
-		0, 1, 1, 1,
+		0, 0, 1, 1,
 		false, ui.AlignFill, false, ui.AlignFill)
 	grid.Append(entry,
-		1, 1, 1, 1,
+		1, 0, 1, 1,
 		true, ui.AlignFill, false, ui.AlignFill)
 
-	button1 := ui.NewButton("Label Path")
+	button1 := ui.NewButton("Test Data")
 	entry1 := ui.NewEntry()
 	entry1.SetReadOnly(true)
 	button1.OnClicked(func(*ui.Button) {
@@ -210,170 +420,19 @@ func makeToolbar() ui.Control {
 		entry1.SetText(filename)
 	})
 	grid.Append(button1,
-		0, 2, 1, 1,
+		0, 1, 1, 1,
 		false, ui.AlignFill, false, ui.AlignFill)
 	grid.Append(entry1,
-		1, 2, 1, 1,
+		1, 1, 1, 1,
 		true, ui.AlignFill, false, ui.AlignFill)
-
-	button = ui.NewButton("Run Models")
-	button.OnClicked(func(*ui.Button) {
-		ui.MsgBox(mainwin,
-			"This is a normal message box.",
-			"More detailed information can be shown here.")
-	})
 
 	return vbox
 }
 
-func makeNumbersPage() ui.Control {
-	hbox := ui.NewHorizontalBox()
-	hbox.SetPadded(true)
-
-	group := ui.NewGroup("Numbers")
-	group.SetMargined(true)
-	hbox.Append(group, true)
-
-	vbox := ui.NewVerticalBox()
-	vbox.SetPadded(true)
-	group.SetChild(vbox)
-
-	spinbox := ui.NewSpinbox(0, 100)
-	slider := ui.NewSlider(0, 100)
-	pbar := ui.NewProgressBar()
-	spinbox.OnChanged(func(*ui.Spinbox) {
-		slider.SetValue(spinbox.Value())
-		pbar.SetValue(spinbox.Value())
-	})
-	slider.OnChanged(func(*ui.Slider) {
-		spinbox.SetValue(slider.Value())
-		pbar.SetValue(slider.Value())
-	})
-	vbox.Append(spinbox, false)
-	vbox.Append(slider, false)
-	vbox.Append(pbar, false)
-
-	ip := ui.NewProgressBar()
-	ip.SetValue(-1)
-	vbox.Append(ip, false)
-
-	group = ui.NewGroup("Lists")
-	group.SetMargined(true)
-	hbox.Append(group, true)
-
-	vbox = ui.NewVerticalBox()
-	vbox.SetPadded(true)
-	group.SetChild(vbox)
-
-	cbox := ui.NewCombobox()
-	cbox.Append("Combobox Item 1")
-	cbox.Append("Combobox Item 2")
-	cbox.Append("Combobox Item 3")
-	vbox.Append(cbox, false)
-
-	ecbox := ui.NewEditableCombobox()
-	ecbox.Append("Editable Item 1")
-	ecbox.Append("Editable Item 2")
-	ecbox.Append("Editable Item 3")
-	vbox.Append(ecbox, false)
-
-	rb := ui.NewRadioButtons()
-	rb.Append("Radio Button 1")
-	rb.Append("Radio Button 2")
-	rb.Append("Radio Button 3")
-	vbox.Append(rb, false)
-
-	return hbox
-}
-
-func makeDataChoosersPage() ui.Control {
-	hbox := ui.NewHorizontalBox()
-	hbox.SetPadded(true)
-
-	vbox := ui.NewVerticalBox()
-	vbox.SetPadded(true)
-	hbox.Append(vbox, false)
-
-	vbox.Append(ui.NewDatePicker(), false)
-	vbox.Append(ui.NewTimePicker(), false)
-	vbox.Append(ui.NewDateTimePicker(), false)
-	vbox.Append(ui.NewFontButton(), false)
-	vbox.Append(ui.NewColorButton(), false)
-
-	hbox.Append(ui.NewVerticalSeparator(), false)
-
-	vbox = ui.NewVerticalBox()
-	vbox.SetPadded(true)
-	hbox.Append(vbox, true)
-
-	grid := ui.NewGrid()
-	grid.SetPadded(true)
-	vbox.Append(grid, false)
-
-	button := ui.NewButton("Open File")
-	entry := ui.NewEntry()
-	entry.SetReadOnly(true)
-	button.OnClicked(func(*ui.Button) {
-		filename := ui.OpenFile(mainwin)
-		if filename == "" {
-			filename = "(cancelled)"
-		}
-		entry.SetText(filename)
-	})
-	grid.Append(button,
-		0, 0, 1, 1,
-		false, ui.AlignFill, false, ui.AlignFill)
-	grid.Append(entry,
-		1, 0, 1, 1,
-		true, ui.AlignFill, false, ui.AlignFill)
-
-	button = ui.NewButton("Save File")
-	entry2 := ui.NewEntry()
-	entry2.SetReadOnly(true)
-	button.OnClicked(func(*ui.Button) {
-		filename := ui.SaveFile(mainwin)
-		if filename == "" {
-			filename = "(cancelled)"
-		}
-		entry2.SetText(filename)
-	})
-	grid.Append(button,
-		0, 1, 1, 1,
-		false, ui.AlignFill, false, ui.AlignFill)
-	grid.Append(entry2,
-		1, 1, 1, 1,
-		true, ui.AlignFill, false, ui.AlignFill)
-
-	msggrid := ui.NewGrid()
-	msggrid.SetPadded(true)
-	grid.Append(msggrid,
-		0, 2, 2, 1,
-		false, ui.AlignCenter, false, ui.AlignStart)
-
-	button = ui.NewButton("Message Box")
-	button.OnClicked(func(*ui.Button) {
-		ui.MsgBox(mainwin,
-			"This is a normal message box.",
-			"More detailed information can be shown here.")
-	})
-	msggrid.Append(button,
-		0, 0, 1, 1,
-		false, ui.AlignFill, false, ui.AlignFill)
-	button = ui.NewButton("Error Box")
-	button.OnClicked(func(*ui.Button) {
-		ui.MsgBoxError(mainwin,
-			"This message box describes an error.",
-			"More detailed information can be shown here.")
-	})
-	msggrid.Append(button,
-		1, 0, 1, 1,
-		false, ui.AlignFill, false, ui.AlignFill)
-
-	return hbox
-}
-
 func setupUI() {
 	mainwin = ui.NewWindow("libui Control Gallery", 640, 480, true)
+	windowData.Models = make([]ModelConfig, 5)
+	windowData.ModelCount = 0
 	mainwin.OnClosing(func(*ui.Window) bool {
 		ui.Quit()
 		return true
@@ -382,22 +441,8 @@ func setupUI() {
 		mainwin.Destroy()
 		return true
 	})
-
-	tab := ui.NewTab()
-	mainwin.SetChild(tab)
 	mainwin.SetMargined(true)
-
-	tab.Append("Basic Controls", makeBasicControlsPage())
-	tab.SetMargined(0, true)
-
-	tab.Append("Numbers and Lists", makeNumbersPage())
-	tab.SetMargined(1, true)
-
-	tab.Append("Data Choosers", makeDataChoosersPage())
-	tab.SetMargined(2, true)
-
-	tab.Append("testing", makeToolbar())
-	tab.SetMargined(3, true)
+	mainwin.SetChild(makeToolbar2())
 
 	mainwin.Show()
 }
