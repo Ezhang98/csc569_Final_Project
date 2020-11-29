@@ -1,0 +1,57 @@
+{
+ "TrainData": "",
+ "TestData": "",
+ "ModelCount": 3,
+ "Models": [
+  {
+   "ModelID": 0,
+   "Name": "Model 1",
+   "Activation": 1,
+   "Nodes": 7,
+   "Layers": 0,
+   "LearningRate": "",
+   "Trees": 0,
+   "MaxDepth": 0
+  },
+  {
+   "ModelID": 1,
+   "Name": "Model 2",
+   "Activation": 0,
+   "Nodes": 0,
+   "Layers": 10,
+   "LearningRate": "0.5",
+   "Trees": 0,
+   "MaxDepth": 0
+  },
+  {
+   "ModelID": 2,
+   "Name": "Model 3",
+   "Activation": 0,
+   "Nodes": 0,
+   "Layers": 0,
+   "LearningRate": "",
+   "Trees": 4,
+   "MaxDepth": 3
+  },
+  {
+   "ModelID": 0,
+   "Name": "",
+   "Activation": 0,
+   "Nodes": 0,
+   "Layers": 0,
+   "LearningRate": "",
+   "Trees": 0,
+   "MaxDepth": 0
+  },
+  {
+   "ModelID": 0,
+   "Name": "",
+   "Activation": 0,
+   "Nodes": 0,
+   "Layers": 0,
+   "LearningRate": "",
+   "Trees": 0,
+   "MaxDepth": 0
+  }
+ ]
+}
