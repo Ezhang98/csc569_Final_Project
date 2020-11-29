@@ -30,7 +30,8 @@ var numWorkers int
 type MasterData struct {
 	id 					int
 	numWorkers			int					
-	request				[]chan string
+	request				[]chan ModelConfig
+	models				[] ModelConfig
 	replies				[]chan string
 	corpses				chan []bool
 	working				[]string
@@ -39,6 +40,8 @@ type MasterData struct {
 	log 				[]string
 	hb1					[]chan [][]int64
 	hb2 				[]chan [][]int64
+	test 			[][][]float64
+	training		[][][]float64
 }
 
 type NeuralNet struct {
@@ -50,6 +53,33 @@ type NeuralNet struct {
 	momentum		float64
 	test 			[][][]float64
 	training		[][][]float64
+}
+
+type ModelConfig struct {
+	ModelID int
+	Name    string
+	Model1Params
+	Model2Params
+	Model3Params
+}
+
+type Model1Params struct {
+	Activation int
+	Nodes      int
+}
+
+type Model2Params struct {
+	inputNodes   	int
+	hiddenLayers 	[]int
+	outputLayer		int
+	numEpochs		int
+	learningRate	float64
+	momentum		float64
+}
+
+type Model3Params struct {
+	Trees    int
+	MaxDepth int
 }
 
 func main() {
@@ -64,6 +94,7 @@ func main() {
 	// launches master and shadow master nodes
 	launchServers(os.Args[1])
 
+	// customize number of nodes to run a system on? on UI
 	//fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
 }
 
@@ -77,7 +108,7 @@ func launchServers(userInput string) {
 	mrData.replies = make([]chan string, mrData.numWorkers)		// master <- worker : worker reply for task completion
 	mrData.corpses = make(chan []bool, mrData.numWorkers)		// master <- heartbeat : workers that have died
 	mrData.working = make([]string, mrData.numWorkers)			// which tasks assigned to which workers
-	// mrData.finished = make([]string, mrData.numshards)			// which shared have completed
+	mrData.finished = make([]string, len(mrData.models))		// which shared have completed
 	
 	var hb1 = make([]chan [][]int64, mrData.numWorkers+3)		// heartbeat channels to neighbors for read
 	var hb2 = make([]chan [][]int64, mrData.numWorkers+3)		// heartbeat channels to neighbors for write
@@ -165,8 +196,12 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 			killHB <- "die"
 			return
 			
-		} else if currentStep == "step working" {
+		}  else if currentStep == "step working" {
 			// manage the distributeTasks step 
+			trainpath := "../datasets/mnist_train.csv"
+			trainpath := "../datasets/mnist_test.csv"
+			mrData.training = parseCSV(trainpath)
+			mrData.test = parseCSV(testpath)
 			mrData = distributeTasks(mrData)
 			currentStep = "step cleanup"
 			mrData.log = append(mrData.log, currentStep)	//appends master distributeTasks step to log
@@ -192,6 +227,7 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 	// fmt.Println("Running master has died.")
 }
 
+
 func distributeTasks(mrData MasterData) MasterData {
 	count := 0
 	shardnumber := 0
@@ -202,7 +238,7 @@ func distributeTasks(mrData MasterData) MasterData {
 		for i := 0; i < mrData.numWorkers; i++ {
 			// checks for available workers
 			if mrData.working[i] == "" {
-				for j := 0; j < mrData.numShards; j++ {
+				for j := 0; j < len(mrData.models); j++ {
 					if mrData.finished[j] == "not started" {
 						shardnumber = j
 						mrData.finished[j] = "started"
@@ -292,17 +328,13 @@ func cleanup(mrData MasterData) MasterData {
 	return mrData
 }
 
-func typeofstruct(x interface{}){
-	fmt.Println(reflect.TypeOf(x))
-	switch reflect.TypeOf(x){
-	case main.NeuralNet:
+func runModelType(model ModelConfig){
+
+	switch model.Name{
+	case "neuralnet":
 		runNeuralNet(x)
 	default:
 	}
-}
-
-func runNeuralNet(parameters NeuralNet){
-
 }
 
 // Helper function to find max
