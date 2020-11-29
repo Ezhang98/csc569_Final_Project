@@ -1,302 +1,311 @@
 // Group Members: Evan Zhang, Alexander Garcia and Christina Monahan
 // Distributed System for Tuning Hyperparameters of Neural Networks
-// PAXOS election, consensus, and recovery algorithms
+// PAXOS election, consensus, and recovery algorithm
 
 package main
 
 import (
-	"bufio"
+	// "encoding/json"
 	"fmt"
-	"io/ioutil"
+	// "hash/fnv"
+	// "io/ioutil"
+	"log"
 	"os"
+	// "path/filepath"
+	// "plugin"
+	// "sort"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
+	"bufio"
+	"github.com/dathoangnd/gonet"
+	"encoding/csv"
 )
 
-// content_types: prepare 0, promise 1, propose 2, accept 3, election 4
-type msg struct {
-	content_type int
-	from         int
-	to           int
-	cmd          Command
+// number of workers
+var numWorkers int
+
+//struct to organize data into the master function
+type MasterData struct {
+	id 					int
+	numWorkers			int					
+	request				[]chan string
+	replies				[]chan string
+	corpses				chan []bool
+	working				[]string
+	finished			[]string
+	toShadowMasters     []chan string
+	log 				[]string
+	hb1					[]chan [][]int64
+	hb2 				[]chan [][]int64
 }
 
-// channels
-type buffer struct {
-	id  int
-	buf map[int]chan msg
+type NeuralNet struct {
+	inputNodes   	int
+	hiddenLayers 	[]int
+	outputLayer		int
+	numEpochs		int
+	learningRate	float64
+	momentum		float64
+	test 			[][][]float64
+	training		[][][]float64
 }
 
-type Model struct {
-	datafile        string
-	hyperparameters []float64
-	modelType       string
-}
-
-type Command struct {
-	id         int
-	name       string
-	models     []Model
-	configFile string
-	modelchan  []chan string
-}
-
-type Node struct {
-	id        int
-	position  string
-	stored    int
-	commitLog []Command
-	phone     *buffer
-	hbtable   *[][]int64
-	hb1       []chan [][]int64
-	hb2       []chan [][]int64
-	backup    *os.File
-}
-
-// System of channels for communication
-func makeNetwork(length int) *buffer {
-	phone := buffer{buf: make(map[int]chan msg, 0)}
-	for i := 0; i < length; i++ {
-		phone.buf[i] = make(chan msg, 1024)
-	}
-	return &phone
-}
-
-// sending channel
-func (phone *buffer) send(m msg) {
-	phone.buf[m.to] <- m
-}
-
-// receive channel
-func (phone *buffer) receive(id int) msg {
-	select {
-	case reply := <-phone.buf[id]:
-		return reply
-	case <-time.After(100 * time.Millisecond):
-		return msg{content_type: -1}
-	}
-}
-
-// run proposer function to run consensus
-func (n *Node) runProposer(numNodes int, input chan string) {
-	select {
-	case text := <-input:
-		n = consensus(n, text, numNodes)
-	default:
-	}
-	n.position = "acceptor"
-}
-
-// run Acceptor function - accepts proposals, sends promise, starts election
-func (n *Node) runAcceptor(count int, numNodes int) int {
-	lowest := 0
-	count2 := 0
-	if count == 20 {
-		// run elections
-		for i := 0; i < numNodes; i++ {
-			if i == n.id {
-				continue
-			}
-			var c Command
-			m := msg{from: n.id, to: i, cmd: c, content_type: 4}
-			n.phone.send(m)
-			// accept request next value
-		}
-		count = 0
-		lowest = n.id
-		for {
-			resp := n.phone.receive(n.id)
-			count++
-			// if message type 4, check from value
-			if resp.content_type == 4 {
-				count2++
-				if resp.from < lowest {
-					lowest = resp.from
-				}
-			}
-			if count == 20 || count2 == numNodes-1 {
-				break
-			}
-		}
-		if lowest == n.id {
-			// become proposer
-			n.position = "proposer"
-			return 0
-		}
-		return 0
-	}
-	// acceptor receives message
-	m := n.phone.receive(n.id)
-	if m.content_type == -1 {
-		count++
-		return count
+func main() {
+	//timer := time.Now()
+	
+	// check command line arguments
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run final.go <number of nodes>")
+		return
 	}
 
-	c := m.cmd
-	if m.content_type == 0 {
-		val := n.stored
-		var resp Command
-		resp.name = "halt"
-		if val < c.id {
-			resp.id = c.id
-			n.stored = c.id
-		} else {
-			resp.id = val + 1
-		}
-		m2 := msg{from: n.id, to: m.from, cmd: resp, content_type: 1}
+	// launches master and shadow master nodes
+	launchServers(os.Args[1])
 
-		n.phone.send(m2)
-	} else if m.content_type == 4 {
-		count2++
-		for i := 0; i < numNodes; i++ {
-			if i == n.id {
-				continue
-			}
-			var c Command
-			m := msg{from: n.id, to: i, cmd: c, content_type: 4}
-			n.phone.send(m)
-			// accept request next value
-		}
-		count = 0
-		lowest = n.id
-		for {
-			resp := n.phone.receive(n.id)
-			count++
-			// if message type 4, check from value
-			if resp.content_type == 4 {
-				count2++
-				if resp.from < lowest {
-					lowest = resp.from
-				}
-			}
-			if count == 20 || count2 == numNodes-1 {
-				break
-			}
-		}
-		if lowest == n.id {
-			// become proposer
-			n.position = "proposer"
-			return 0
-		}
-	}
-	if m.content_type == 3 {
-		n.commitToLog(c)
-	}
-	return 0
+	//fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
 }
 
-// commitLog saves to stable storage, and provides persistent state
-func (n *Node) commitToLog(c Command) {
-	if n.commitLog[c.id].name == "" {
-		n.commitLog[c.id] = c
-		logMsg := fmt.Sprintf("%d %s %s\n", c.id, c.name, c.models)
-		_, err := n.backup.WriteString(logMsg)
-		if err != nil {
-			fmt.Println(err)
-		}
-	}
-}
+// Launches nodes and creates MasterData structure
+func launchServers(userInput string) {
+	numWorkers, _ = strconv.Atoi(userInput)
 
-// launches a new node with a heartbeat as a goRoutine
-func (n *Node) launch(num int, chan1 chan string, input chan string, killhb chan string) {
-	go heartbeat(n.hb1, n.hb2, n.id, n.hbtable, num, killhb)
-	count := 0
-	// fmt.Println(n.id, "started")
-	for {
-		if n.position == "proposer" {
-			n.runProposer(num, input)
-		} else if n.position == "acceptor" {
-			count = n.runAcceptor(count, num)
-		}
-		select {
-		case reply := <-chan1:
-			if reply == "exit" {
-				break
-			}
-		default:
-		}
-	}
-	n.backup.Close()
-	fmt.Println(n.id, "died")
-}
+	var mrData MasterData
+	mrData.numWorkers = numWorkers
+	mrData.request = make([]chan string, mrData.numWorkers)		// worker <- master : for task assignment
+	mrData.replies = make([]chan string, mrData.numWorkers)		// master <- worker : worker reply for task completion
+	mrData.corpses = make(chan []bool, mrData.numWorkers)		// master <- heartbeat : workers that have died
+	mrData.working = make([]string, mrData.numWorkers)			// which tasks assigned to which workers
+	// mrData.finished = make([]string, mrData.numshards)			// which shared have completed
+	
+	var hb1 = make([]chan [][]int64, mrData.numWorkers+3)		// heartbeat channels to neighbors for read
+	var hb2 = make([]chan [][]int64, mrData.numWorkers+3)		// heartbeat channels to neighbors for write
+	killMaster := make(chan string, 10)							// channel to kill Master to verify replication and recovery from log
 
-// consensus function consistently stores data
-func consensus(proposer *Node, command string, numNodes int) *Node {
-	for {
-		count := 0
-		accepted := make([]bool, numNodes)
-		largest := 0
-		for j := 0; j < numNodes; j++ {
-			if proposer.id == j {
-				continue
-			}
-			// prepare request next value
-			var c Command
-			c.id = proposer.stored + 1
-			if largest > c.id {
-				c.id = largest
-			} else {
-				largest = c.id
-			}
-			c.name = "hash"
-			c.models = command
-			m := msg{from: proposer.id, to: j, cmd: c, content_type: 0}
-			proposer.phone.send(m)
-			// accept request next value
-			resp := proposer.phone.receive(proposer.id)
-			cmd := resp.cmd
-			if cmd.id == c.id {
-				count++
-				accepted[j] = true
-			} else {
-				if cmd.id > largest {
-					largest = cmd.id
-				}
-				accepted[j] = false
-			}
-		}
-		if count >= 4 {
-			proposer.stored = largest
+	// initialize heartbeat tables
+	for i := 0; i < mrData.numWorkers+3; i++ {
+		hb1[i] = make(chan [][]int64, 1024)
+		hb2[i] = make(chan [][]int64, 1024)
+	}
+	mrData.hb1 = hb1
+	mrData.hb2 = hb2
+
+	// initialize worker channels
+	for k := 0; k < mrData.numWorkers; k++ {
+		mrData.request[k] = make(chan string)
+		mrData.replies[k] = make(chan string)
+		mrData.working[k] = ""	
+	}
+	
+	// initialize shadowMasters
+	numShadowMasters := 2
+	// shadowMaster <- master : replication
+	mrData.toShadowMasters = make([]chan string, numShadowMasters)	
+	for j := 0; j < numShadowMasters; j++ {
+		mrData.toShadowMasters[j] = make(chan string, 10)
+	}
+
+	// start nodes
+	masterlog := make([]string, 0)
+	go master(mrData, hb1, hb2, masterlog, killMaster)
+	go shadowMaster(mrData.toShadowMasters[0], hb1, hb2, mrData.numWorkers, mrData.numWorkers + 1, mrData, killMaster)
+	go shadowMaster(mrData.toShadowMasters[1], hb1, hb2, mrData.numWorkers, mrData.numWorkers + 2, mrData, killMaster)
+
+	// wait here until "q" is entered from the command line
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		text := scanner.Text()
+		if text == "q"{
 			break
 		}
 	}
-	var c Command
-	for j := 0; j < numNodes; j++ {
-		// accept request next value
-		if proposer.id == j {
-			continue
+}
+
+// Master node
+func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log []string, killMaster chan string) {
+	// initialize variables
+	currentStep := "step start"
+	mrData.log = log
+	killHB := make(chan string, 10)
+	message := ""
+
+	// Master Recovery: resume step after Master failure
+	for i := 0; i < len(log); i++{
+		if log[i][0:4] == "step"{
+			currentStep = log[i]
 		}
-		c.id = proposer.stored
-		c.name = "hash"
-		c.models = command
-		m2 := msg{from: proposer.id, to: j, cmd: c, content_type: 3}
-		proposer.phone.send(m2)
 	}
-	proposer.commitToLog(c)
-	return proposer
+
+	// Run master heartbeat
+	go masterHeartbeat(hb1, hb2, mrData.numWorkers, mrData.corpses, killHB, killMaster, mrData)
+	
+	// fmt.Println("Master running: ", currentStep) // print in UI
+	for {
+		if currentStep == "step start" {
+			// If master died partway through launching workers, find the last logged k and start from there
+			k := 0
+			if len(log) > 0 {
+				last := strings.Split(log[len(log) - 1], " ")
+				if last[0] == "launch" {
+					k, _ = strconv.Atoi(last[2])
+				}
+			}
+			for ; k < mrData.numWorkers; k++ {
+				go worker(mrData.request[k], mrData.replies[k], hb1, hb2, k)
+				// message = fmt.Sprintf("launch worker %s", k)
+				mrData.log = append(mrData.log, currentStep)	//appends launch worker step to log
+				mrData.toShadowMasters[0] <- message			//sends launch worker message to first Shadow Master channel
+				mrData.toShadowMasters[1] <- message			//sends launch worker message to second Shadow Master channel
+			}
+			currentStep = "step working"
+			mrData.log = append(mrData.log, currentStep)	//appends load step to log
+			mrData.toShadowMasters[0] <- currentStep		//sends load message to first Shadow Master channel
+			mrData.toShadowMasters[1] <- currentStep		//sends load message to second Shadow Master channel
+			killHB <- "die"
+			return
+			
+		} else if currentStep == "step working" {
+			// manage the distributeTasks step 
+			mrData = distributeTasks(mrData)
+			currentStep = "step cleanup"
+			mrData.log = append(mrData.log, currentStep)	//appends master distributeTasks step to log
+			mrData.toShadowMasters[0] <- currentStep		//sends distributeTasks message to first Shadow Master channel
+			mrData.toShadowMasters[1] <- currentStep		//sends distributeTasks message to second Shadow Master channel
+			killHB <- "die"
+			return
+
+		} else if currentStep == "step cleanup" {
+			// cleanup workers who should now be done with all tasks
+			mrData = cleanup(mrData)
+			currentStep = "step end"
+			mrData.log = append(mrData.log, currentStep)	//appends end message to log
+			mrData.toShadowMasters[0] <- currentStep		//sends end message to first Shadow Master channel
+			mrData.toShadowMasters[1] <- currentStep		//sends end message to second Shadow Master channel
+			killHB <- "die"
+			return
+		} else {
+			break
+		}
+	}
+	killHB <- "die"
+	// fmt.Println("Running master has died.")
 }
 
-//creates a new node
-func createNode(id int, position string, stored int, cLog []Command, hb1chan []chan [][]int64, hb2chan []chan [][]int64) *Node {
-	server := Node{id: id, position: position, stored: stored, commitLog: cLog}
-	now := time.Now().Unix() // current local time
-	hbtable := make([][]int64, 8)
-	// initialize hbtable
-	for i := 0; i < 8; i++ {
-		hbtable[i] = make([]int64, 2)
-		hbtable[i][0] = 0
-		hbtable[i][1] = now
+func distributeTasks(mrData MasterData) MasterData {
+	count := 0
+	shardnumber := 0
+	loop := true
+
+	fmt.Println("Distributing Tasks Started...")
+	for loop {
+		for i := 0; i < mrData.numWorkers; i++ {
+			// checks for available workers
+			if mrData.working[i] == "" {
+				for j := 0; j < mrData.numShards; j++ {
+					if mrData.finished[j] == "not started" {
+						shardnumber = j
+						mrData.finished[j] = "started"
+						mrData.request[i] <- ("m_" + strconv.Itoa(shardnumber) + "_" + strconv.Itoa(i))
+						mrData.contents[i] <- (mrData.arrShards[shardnumber])
+						mrData.working[i] = strconv.Itoa(shardnumber)
+						break
+					}
+				}
+			}
+
+			// checks for replies and dead workers
+			select {
+			case message := <-mrData.replies[i]:
+				replied := strings.Split(message, "_")
+				workerID, _ := strconv.Atoi(replied[1])
+				mrData.working[workerID] = ""
+				shardID, _ := strconv.Atoi(replied[0])
+				mrData.finished[shardID] = "finished"
+				count++
+			case coffins := <-mrData.corpses:
+				for j := 0; j < mrData.numWorkers; j++ {
+					if coffins[j] == true {
+						mrData.hb1[j] = make(chan [][]int64, numWorkers+3)
+						mrData.hb2[j] = make(chan [][]int64, numWorkers+3)
+						mrData.request[j] = make(chan string)
+						mrData.contents[j] = make(chan string)
+						mrData.replies[j] = make(chan string)
+						go worker(mrData.request[j], mrData.contents[j], mrData.replies[j], mrData.hb1, mrData.hb2, j)
+						tempShardID, _ := strconv.Atoi(mrData.working[j])
+						mrData.finished[tempShardID] = "not started"
+						mrData.working[j] = ""
+						coffins[j] = false
+					}
+				}
+			default:
+			}
+		}
+		
+		// checks that all shards are completed
+		if count >= mrData.numShards {
+			check := true
+			
+			for a := 0; a < mrData.numWorkers; a++ {
+				if mrData.working[a] != "" {
+					check = false
+				}
+			}
+			if check == true {
+				loop = false
+			}
+		}
 	}
-	server.hbtable = &hbtable
-	server.hb1 = hb1chan
-	server.hb2 = hb2chan
-	mode := os.O_APPEND | os.O_CREATE | os.O_WRONLY
-	filename := fmt.Sprintf("backup%d", id)
-	server.backup, _ = os.OpenFile(filename, mode, 0644)
-	return &server
+	fmt.Println("\nDistributing Finished")
+	return mrData
 }
 
+
+func worker(master chan string, content chan string, reply chan string,  hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
+	go heartbeat(hb1, hb2, k)
+	task := ""
+	for {
+		// read task from channel
+		task = <-master
+		tasks := strings.Split(task, "_")
+		if tasks[0] == "end" {
+			reply <- tasks[2]
+			return
+		}
+		if tasks[0] == "m" {
+			shard := <-content
+			mapper(tasks[1], shard)
+		} 
+		reply <- tasks[1] + "_" + tasks[2]
+	}
+}
+
+// Shuts down worker nodes
+func cleanup(mrData MasterData) MasterData {
+	// Check that all workers shutdown
+	for i := 0; i < mrData.numWorkers; i++ {
+		mrData.request[i] <- "end_0_" + strconv.Itoa(i)
+		msg := <-mrData.replies[i]
+		num, _ := strconv.Atoi(msg)
+		mrData.working[num] = ""
+	}
+	return mrData
+}
+
+func typeofstruct(x interface{}){
+	fmt.Println(reflect.TypeOf(x))
+	switch reflect.TypeOf(x){
+	case main.NeuralNet:
+		runNeuralNet(x)
+	default:
+	}
+}
+
+func runNeuralNet(parameters NeuralNet){
+
+}
+
+// Helper function to find max
 func max(x, y int64) int64 {
 	if x > y {
 		return x
@@ -304,190 +313,125 @@ func max(x, y int64) int64 {
 	return y
 }
 
-// function to distribute model to be trained on acceptor nodes
-func distroModel(acceptor *Node, Command string){
-	for j := 0; j < numNodes; j++ {
-		models[j] := make([]Model, 1024)
-		modelChan <- models[j]
-		if acceptor.id == j {
-			<- modelChan
-		}
-	}
-}
+func parseCSV(path string) [][][]float64{
+	data := make([][][]float64, 0)
 
-func main() {
-	// check command line arguments
-	numNodes := 0
-	end := false
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run paxos.go numNodes")
-		return
-	}
-	numNodes, _ = strconv.Atoi(os.Args[1])
-	if numNodes < 3 {
-		fmt.Println("numNodes needs to be at least 3")
-		return
+	// Open the file
+	csvfile, err := os.Open(path)
+	if err != nil {
+		log.Fatalln("Couldn't open the csv file", err)
 	}
 
-	// initialize nodes
-	nodes := make([]*Node, numNodes)
+	r := csv.NewReader(csvfile)
+	index := 0
 
-	var hb1chan = make([]chan [][]int64, 8) // heartbeat channels to neighbors for read
-	var hb2chan = make([]chan [][]int64, 8)
-	var modelchan = make([]chan string) // channel to send models
-
-	// initialize heartbeat tables
-	for i := 0; i < 8; i++ {
-		hb1chan[i] = make(chan [][]int64, 1024)
-		hb2chan[i] = make(chan [][]int64, 1024)
-	}
-
-	for i := 0; i < numNodes; i++ {
-		commitLog := make([]Command, 1024)
-		nodes[i] = createNode(i, "acceptor", 0, commitLog, hb1chan, hb2chan)
-	}
-
-	phone := makeNetwork(len(nodes))
-
-	//killNodesChan and killhb channels to be used with kill calls
-	killNodesChan := make([]chan string, numNodes)
-	killhb := make([]chan string, numNodes)
-	input := make(chan string, 1024)
-	// start all nodes
-	for i := 0; i < numNodes; i++ {
-		nodes[i].phone = phone
-		killNodesChan[i] = make(chan string, 10)
-		killhb[i] = make(chan string, 10)
-		go nodes[i].launch(numNodes, killNodesChan[i], input, killhb[i])
-	}
-
-	// function to accept input from user and will kill goRoutines when exit is typed
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		fmt.Print("> ")
-		for scanner.Scan() {
-			text := scanner.Text()
-			if text == "exit" {
-				for i := 0; i < numNodes; i++ {
-					killNodesChan[i] <- "exit"
-					killhb[i] <- "exit"
+	// Parse Data
+	for {
+		// Read each record from csv
+		record, err := r.Read()
+		if index != 0{
+			floatarr := make([]float64, len(record) + 1)
+			expected := make([]float64, 1)
+			for i := 0; i < len(record); i++ {
+				if s, err := strconv.ParseFloat(record[i], 64); err == nil {
+					if i == 0{
+						expected[0] = s
+					}else{
+						floatarr[i] = s
+					}
+					// fmt.Println(s)
 				}
-				end = true
+			}
+			if len(floatarr[1:]) == 0{
 				break
 			}
-			input <- text
-			time.Sleep(250 * time.Millisecond)
-			fmt.Print("> ")
+			one_entry := [][]float64{floatarr[1:], expected}
+			
+			data = append(data, one_entry)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			// fmt.Println(index)
 		}
-	}()
-
-	// killLists to simulate a hardware failure by killing nodes
-	nodeKillList := make([][]int, 20)
-	index := 0
-	for i := 0; i < 20; i++ {
-		index = i % numNodes
-		nodeKillList[i] = make([]int, 2)
-		nodeKillList[i][0] = index
-		nodeKillList[i][1] = 10 * (i + 1)
+		index++
 	}
-	counter := 0
-	next := 0
-	for {
-		if end {
-			break
-		}
-		if nodeKillList[next][1] == counter {
-			// send kill to nkl[next][0]
-			fmt.Println("\nKilling node", nodeKillList[next][0])
-			fmt.Print("> ")
-			killNodesChan[nodeKillList[next][0]] <- "exit"
-			killhb[nodeKillList[next][0]] <- "exit"
-		}
-		// restart node at nkl[next][0] after 10 cycles
-		if nodeKillList[next][1]+5 == counter {
-			i := nodeKillList[next][0]
-			commitLog, lastStored := catchUpCommands(i)
-			nodes[i] = createNode(i, "acceptor", lastStored, commitLog, hb1chan, hb2chan)
-			nodes[i].phone = phone
-			go nodes[i].launch(numNodes, killNodesChan[i], input, killhb[i])
-			fmt.Println("\nRestarting Node", i)
-			fmt.Print("> ")
-			next++
-		}
-		counter++
-		if next == 20 {
-			next = 0
-		}
-		time.Sleep(1 * time.Second)
-	}
+	// fmt.Println(data)
+	return data
 }
 
-// catchUpCommands to restore a failed node to its previous state
-func catchUpCommands(id int) ([]Command, int) {
-	commands := make([]Command, 1024)
-	stored := 0
-	filename := fmt.Sprintf("backup%d", id)
-	content, err := ioutil.ReadFile(filename)
-	if err != nil {
-		fmt.Println(err)
-	}
-	lines := strings.Split(string(content), "\n")
+func runNeuralNet(training [][][]float64, test [][][]float64, inputNodes int, hiddenLayers []int, outputLayer int, numEpochs int, learningRate float64, momentum float64){
+	// Create a neural network
+	// 2 nodes in the input layer
+	// 2 hidden layers with 4 nodes each []int{4, 4}
+	// 1 node in the output layer
+	// The problem is classification, not regression
+	nn := gonet.New(inputNodes, hiddenLayers, outputLayer, false)
 
-	for i := 0; i < len(lines)-1; i++ {
-		x := strings.Split(lines[i], " ")
-		if len(x) == 0 {
-			continue
-		}
-		var c Command
-		c.id, _ = strconv.Atoi(x[0])
-		c.name = x[1]
-		c.models = x[2]
-		commands[c.id] = c
-		stored = c.id
-	}
-	return commands, stored
+	// Train the network
+	// Run for 3000 epochs
+	// The learning rate is 0.4 and the momentum factor is 0.2
+	// Enable debug mode to log learning error every 1000 iterations
+	nn.Train(training, numEpochs, learningRate, momentum, true)
+
+	// Predict
+	// testInput := []float64{1, 0}
+	// fmt.Printf("test input: %f  %f => %f\n", testInput[0], testInput[1], nn.Predict(testInput)[0])
+	// // Save the model
+	// nn.Save("model.json")
+	// // Load the model
+	// nn2, err := gonet.Load("model.json")
+	// if err != nil {
+	// 	log.Fatal("Load model failed.")
+	// }
+	// fmt.Printf("%f XOR %f => %f\n", testInput[0], testInput[1], nn2.Predict(testInput)[0])
+	// // 1.000000 XOR 0.000000 => 0.943074
 }
 
-// update heartbeat table
-func updateTable(index int, hbtableOG *[][]int64, counter int, hb1 []chan [][]int64, hb2 []chan [][]int64, numNodes int) {
-	hbtable := *hbtableOG
+// Update heartbeat tables for Master, 2 ShadowMasters and 8 workers
+func updateTable(index int, hbtable [][]int64, counter int, hb1 []chan [][]int64, hb2 []chan [][]int64) [][]int64 {
 	next := index + 1
 	prev := index - 1
 	if prev < 0 {
-		prev = numNodes - 1
+		prev = numWorkers+2
 	}
-	if next > numNodes-1 {
+	if next > numWorkers+2 {
 		next = 0
 	}
 
-	neighbor1 := make([][]int64, numNodes)
-	neighbor2 := make([][]int64, numNodes)
+	temp := make([][]int64, numWorkers+3)
+	neighbor1 := make([][]int64, numWorkers+3)
+	neighbor2 := make([][]int64, numWorkers+3)
 
-	for i := 0; i < numNodes; i++ {
+	for i := 0; i < numWorkers+3; i++ {
 		neighbor1[i] = make([]int64, 2)
 		neighbor1[i][0] = hbtable[i][0]
 		neighbor1[i][1] = hbtable[i][1]
 		neighbor2[i] = make([]int64, 2)
 		neighbor2[i][0] = hbtable[i][0]
 		neighbor2[i][1] = hbtable[i][1]
-
+		temp[i] = make([]int64, 2)
+		temp[i][0] = hbtable[i][0]
+		temp[i][1] = hbtable[i][1]
 	}
 	loop2 := true
-	if counter%5 == 0 {
+	if counter % 1 == 0 {
 		for loop2 {
 			select {
-			case neighbor1_1 := <-hb1[next]:
-				neighbor1 = neighbor1_1
-			default:
-				loop2 = false
+				case neighbor1_1 := <-hb1[next]:
+					neighbor1 = neighbor1_1
+				default:
+					loop2 = false
 			}
 		}
-		for i := 0; i < numNodes; i++ {
-			(*hbtableOG)[i][0] = max(neighbor1[i][0], hbtable[i][0])
-			(*hbtableOG)[i][1] = max(neighbor1[i][1], hbtable[i][1])
+		for i := 0; i < numWorkers+3; i++ {
+			temp[i][0] = max(neighbor1[i][0], hbtable[i][0])
+			temp[i][1] = max(neighbor1[i][1], hbtable[i][1])
 		}
 		loop2 = true
-
+		
 		for loop2 {
 			select {
 			case neighbor2_1 := <-hb2[prev]:
@@ -496,34 +440,173 @@ func updateTable(index int, hbtableOG *[][]int64, counter int, hb1 []chan [][]in
 				loop2 = false
 			}
 		}
-		for i := 0; i < numNodes; i++ {
-			(*hbtableOG)[i][0] = max(neighbor2[i][0], hbtable[i][0])
-			(*hbtableOG)[i][1] = max(neighbor2[i][1], hbtable[i][1])
+		for i := 0; i < numWorkers+3; i++ {
+			temp[i][0] = max(neighbor2[i][0], hbtable[i][0])
+			temp[i][1] = max(neighbor2[i][1], hbtable[i][1])
 		}
 	}
-
 	now := time.Now().Unix() // current local time
-	(*hbtableOG)[index][0] = hbtable[index][0] + 1
-	(*hbtableOG)[index][1] = now
-
+	temp[index][0] = hbtable[index][0] + 1
+	temp[index][1] = now
 	// send table
-	hb1[index] <- *hbtableOG
-	hb2[index] <- *hbtableOG
-
+	hb1[index] <- temp
+	hb2[index] <- temp
+	return temp
 }
 
-// heartbeat function
-func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, hbtable *[][]int64, numNodes int, noPulse chan string) {
+// Heartbeat function for all workers
+func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
+	now := time.Now().Unix() // current local time
 	counter := 0
+	hbtable := make([][]int64, numWorkers+3)
+	// initialize hbtable
+	for i := 0; i < numWorkers+3; i++ {
+		hbtable[i] = make([]int64, 2)
+		hbtable[i][0] = 0
+		hbtable[i][1] = now
+	}
+
 	for {
 		time.Sleep(100 * time.Millisecond)
-		updateTable(k, hbtable, counter, hb1, hb2, numNodes)
+		hbtable = updateTable(k, hbtable, counter, hb1, hb2)
 		counter++
-		select {
-		case reply := <-noPulse:
-			if reply == "exit" {
-				break
+	}
+}
+
+// Heartbeat function for Master
+func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses chan []bool, kill chan string, killMaster chan string, mrData MasterData) {
+	now := time.Now().Unix() // current local time
+	counter := 0
+	currentTable := make([][]int64, numWorkers+3)
+	previousTable := make([][]int64, numWorkers+3)
+
+	// initialize hbtable
+	for i := 0; i < numWorkers+3; i++ {
+		currentTable[i] = make([]int64, 2)
+		previousTable[i] = make([]int64, 2)
+		currentTable[i][0] = 0
+		previousTable[i][0] = 0
+		currentTable[i][1] = now
+		previousTable[i][1] = now
+	}
+	deadWorkers := make([]bool, numWorkers+3)
+	for i := 0; i < 8; i++ {
+		deadWorkers[i] = false
+	}
+	for {
+		select{
+		case reply := <- kill:
+			if reply == "die" {
+				return
+			}
+		default:
+		}
+		time.Sleep(100 * time.Millisecond)
+		currentTable = updateTable(k, previousTable, counter, hb1, hb2)
+		for i := 0; i < numWorkers+3; i++ {
+			if currentTable[k][1] - previousTable[i][1] > 2 {
+				fmt.Println(currentTable[k][1], previousTable[i][1])
+				if i == numWorkers+1 || i == numWorkers+2{
+					fmt.Println("Shadow master died")
+					go shadowMaster(mrData.toShadowMasters[i-numWorkers+1], mrData.hb1, mrData.hb2, mrData.numWorkers, i, mrData, killMaster)
+				} else {
+					fmt.Println("\n\n-------------------killed worker :", i, "\n")
+					deadWorkers[i] = true
+				}
 			}
 		}
+		previousTable = currentTable
+		corpses <- deadWorkers
+		counter++
+	}
+}
+
+// Shadow Master Node
+func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, selfID int, mrData MasterData, kill chan string){
+	// replicate logs to two shadowmasters that monitor if the master dies
+	logs := make([]string, 0)
+	killHB := make(chan string, 3)
+	var isMasterDead = make(chan bool, 1)
+	go shadowHeartbeat(hb1, hb2, masterID, isMasterDead, selfID, killHB)
+	masterNotDead := true
+
+	for masterNotDead{
+		select{
+			case copy := <-copier:
+				logs = append(logs, copy)
+				// check if to die
+				currentStep := copy
+			if currentStep == "step start" {
+				// update logs
+				currentStep = "step load"
+				mrData.log = append(mrData.log, currentStep)
+				
+			} else if currentStep == "step load" {
+				// master load
+				mrData = loadShards(mrData)
+				currentStep = "step working"
+				mrData.log = append(mrData.log, currentStep)
+				
+			} else if currentStep == "step working" {
+				// master working
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				
+			}else if currentStep == "step end"{
+				killHB <- "kill"
+				return
+			}
+			case isDead := <-isMasterDead:
+				masterNotDead = isDead
+			default:	
+		}
+		if !masterNotDead{
+			fmt.Println("Shadow master becomes running master.")
+			go master(mrData, hb1, hb2, logs, kill)
+			masterNotDead = true
+		}
+	}
+}
+
+// Heartbeat for Shadow Master
+func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, isMasterAlive chan bool, selfID int, killHB chan string) string{
+	now := time.Now().Unix() // current local time
+	counter := 0
+	currentTable := make([][]int64, numWorkers+3)
+	previousTable := make([][]int64, numWorkers+3)
+
+	// initialize hbtable
+	for i := 0; i < 11; i++ {
+		currentTable[i] = make([]int64, 2)
+		previousTable[i] = make([]int64, 2)
+		currentTable[i][0] = 0
+		previousTable[i][0] = 0
+		currentTable[i][1] = now
+		previousTable[i][1] = now
+	}
+	
+	for {
+		select {
+			case reply := <- killHB:
+				return reply
+			default:
+		}
+		time.Sleep(100 * time.Millisecond)
+		currentTable = updateTable(selfID, previousTable, counter, hb1, hb2)
+
+		if currentTable[selfID][1] - previousTable[masterID][1] > 2 {
+			if selfID == masterID + 1{
+				fmt.Println("\n----- The Running Master has died -----\n")
+				isMasterAlive <- false
+				currentTable = updateTable(masterID, currentTable, counter, hb1, hb2)
+			}
+		}
+		previousTable = currentTable
+		counter++
 	}
 }
