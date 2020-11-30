@@ -72,14 +72,14 @@ func makeModelParam(m ModelConfig) ui.Control {
 	}
 	alignment := ui.NewCombobox()
 	// note that the items match with the values of the uiDrawTextAlign values
-	alignment.Append("Model 1")
+	alignment.Append("Neural Network")
 	alignment.Append("Model 2")
 	alignment.Append("Model 3")
 	alignment.SetSelected(initial)
 	alignment.OnSelected(func(*ui.Combobox) {
 		s := alignment.Selected()
 		if s == 0 {
-			windowData.Models[m.ModelID].Name = "Model 1"
+			windowData.Models[m.ModelID].Name = "Neural Network"
 			hbox1 := ui.NewHorizontalBox()
 			hbox1.SetPadded(true)
 			grid.Append(hbox1,
@@ -239,7 +239,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 		}
 	})
 
-	if m.Name == "Model 1" {
+	if m.Name == "Neural Network" {
 		hbox1 := ui.NewHorizontalBox()
 		hbox1.SetPadded(true)
 		grid.Append(hbox1,
