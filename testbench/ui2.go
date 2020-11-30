@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"strconv"
 
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
@@ -18,19 +19,23 @@ type UIWindow struct {
 type ModelConfig struct {
 	ModelID int
 	Name    string
-	Model1Params
+	NeuralNet
 	Model2Params
 	Model3Params
 }
 
-type Model1Params struct {
-	Activation int
-	Nodes      int
+type NeuralNet struct {
+	InputNodes      int
+	NumHiddenLayers int
+	OutputNodes     int
+	NumEpochs       int
+	LearningRate    float64
+	Momentum        float64
 }
 
 type Model2Params struct {
-	Layers       int
-	LearningRate string
+	Layers   int
+	Learning string
 }
 
 type Model3Params struct {
@@ -81,31 +86,99 @@ func makeModelParam(m ModelConfig) ui.Control {
 				0, 1, 1, 1,
 				false, ui.AlignFill, false, ui.AlignFill)
 
-			activation := ui.NewCombobox()
-			// note that the items match with the values of the uiDrawTextAlign values
-			activation.Append("tanh")
-			activation.Append("sigmoid")
-			activation.Append("relu")
-			activation.SetSelected(0)
-			activation.OnSelected(func(*ui.Combobox) {
-				windowData.Models[m.ModelID].Activation = activation.Selected()
+			// InputNodes   	int
+			// NumHiddenLayers 	int
+			// OutputNodes		int
+			// NumEpochs		int
+			// LearningRate	float64
+			// Momentum		float64
+
+			// # of input nodes
+			inputNodes := ui.NewSpinbox(0, 100)
+			inputNodes.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].InputNodes = inputNodes.Value()
 			})
-			// activation and nodes
+
 			form1 := ui.NewForm()
 			form1.SetPadded(true)
 			hbox1.Append(form1, false)
-			form1.Append("activation", activation, false)
+			form1.Append("# Input Nodes", inputNodes, false)
 
-			nodes := ui.NewSpinbox(0, 100)
-			nodes.OnChanged(func(*ui.Spinbox) {
-				windowData.Models[m.ModelID].Nodes = nodes.Value()
+			// # of hidden layers
+			layers := ui.NewSpinbox(0, 100)
+			layers.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].NumHiddenLayers = layers.Value()
 			})
 
 			form2 := ui.NewForm()
 			form2.SetPadded(true)
 			hbox1.Append(form2, false)
+			form2.Append("# Hidden Layers", layers, false)
 
-			form2.Append("numNodes", nodes, false)
+			// # of output nodes
+			outputNodes := ui.NewSpinbox(0, 100)
+			outputNodes.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].OutputNodes = outputNodes.Value()
+			})
+
+			form3 := ui.NewForm()
+			form3.SetPadded(true)
+			hbox1.Append(form3, false)
+			form3.Append("# Output Nodes", outputNodes, false)
+
+			// # of epochs
+			epochs := ui.NewSpinbox(0, 100)
+			epochs.OnChanged(func(*ui.Spinbox) {
+				windowData.Models[m.ModelID].NumEpochs = epochs.Value()
+			})
+
+			form4 := ui.NewForm()
+			form4.SetPadded(true)
+			hbox1.Append(form4, false)
+			form4.Append("# of Epochs", epochs, false)
+
+			// learning rate
+			lrate := ui.NewEntry()
+			windowData.Models[m.ModelID].LearningRate = 0.0
+			lrate.OnChanged(func(*ui.Entry) {
+				f, err := strconv.ParseFloat(lrate.Text(), 64)
+				if err == nil {
+					windowData.Models[m.ModelID].LearningRate = f
+				} else {
+					ui.MsgBoxError(mainwin,
+						"Not a Number.",
+						"Please enter a numerical value.")
+					lrate.SetText("")
+				}
+			})
+
+			form5 := ui.NewForm()
+			form5.SetPadded(true)
+			hbox1.Append(form5, false)
+			form5.Append("Learning Rate", lrate, false)
+
+			// momentum
+			momentum := ui.NewEntry()
+			windowData.Models[m.ModelID].Momentum = 0.0
+			momentum.OnChanged(func(*ui.Entry) {
+				f, err := strconv.ParseFloat(momentum.Text(), 64)
+				if err == nil {
+					windowData.Models[m.ModelID].Momentum = f
+				} else {
+					ui.MsgBoxError(mainwin,
+						"Not a Number.",
+						"Please enter a numerical value.")
+					momentum.SetText("")
+				}
+			})
+
+			form6 := ui.NewForm()
+			form6.SetPadded(true)
+			hbox1.Append(form6, false)
+			form6.Append("Momentum", momentum, false)
+
+			// end
+
 		} else if s == 1 {
 			windowData.Models[m.ModelID].Name = "Model 2"
 			hbox1 := ui.NewHorizontalBox()
@@ -127,9 +200,9 @@ func makeModelParam(m ModelConfig) ui.Control {
 
 			lrate := ui.NewEntry()
 			lrate.SetText("0.1")
-			windowData.Models[m.ModelID].LearningRate = "0.1"
+			windowData.Models[m.ModelID].Learning = "0.1"
 			lrate.OnChanged(func(*ui.Entry) {
-				windowData.Models[m.ModelID].LearningRate = lrate.Text()
+				windowData.Models[m.ModelID].Learning = lrate.Text()
 			})
 
 			form1 := ui.NewForm()
@@ -173,30 +246,95 @@ func makeModelParam(m ModelConfig) ui.Control {
 			0, 1, 1, 1,
 			false, ui.AlignFill, false, ui.AlignFill)
 
-		activation := ui.NewCombobox()
-		// note that the items match with the values of the uiDrawTextAlign values
-		activation.Append("tanh")
-		activation.Append("sigmoid")
-		activation.Append("relu")
-		activation.SetSelected(windowData.Models[m.ModelID].Activation)
-		activation.OnSelected(func(*ui.Combobox) {
-			windowData.Models[m.ModelID].Activation = activation.Selected()
+		// # of input nodes
+		inputNodes := ui.NewSpinbox(0, 100)
+		inputNodes.SetValue(windowData.Models[m.ModelID].InputNodes)
+		inputNodes.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].InputNodes = inputNodes.Value()
 		})
-		// activation and nodes
+
 		form1 := ui.NewForm()
 		form1.SetPadded(true)
 		hbox1.Append(form1, false)
-		form1.Append("activation", activation, false)
+		form1.Append("# Input Nodes", inputNodes, false)
 
-		nodes := ui.NewSpinbox(0, 100)
-		nodes.SetValue(windowData.Models[m.ModelID].Nodes)
-		nodes.OnChanged(func(*ui.Spinbox) {
-			windowData.Models[m.ModelID].Nodes = nodes.Value()
+		// # of hidden layers
+		layers := ui.NewSpinbox(0, 100)
+		layers.SetValue(windowData.Models[m.ModelID].NumHiddenLayers)
+		layers.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].NumHiddenLayers = layers.Value()
 		})
+
 		form2 := ui.NewForm()
 		form2.SetPadded(true)
 		hbox1.Append(form2, false)
-		form2.Append("numNodes", nodes, false)
+		form2.Append("# Hidden Layers", layers, false)
+
+		// # of output nodes
+		outputNodes := ui.NewSpinbox(0, 100)
+		outputNodes.SetValue(windowData.Models[m.ModelID].OutputNodes)
+		outputNodes.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].OutputNodes = outputNodes.Value()
+		})
+
+		form3 := ui.NewForm()
+		form3.SetPadded(true)
+		hbox1.Append(form3, false)
+		form3.Append("# Output Nodes", outputNodes, false)
+
+		// # of epochs
+		epochs := ui.NewSpinbox(0, 100)
+		epochs.SetValue(windowData.Models[m.ModelID].NumEpochs)
+		epochs.OnChanged(func(*ui.Spinbox) {
+			windowData.Models[m.ModelID].NumEpochs = epochs.Value()
+		})
+
+		form4 := ui.NewForm()
+		form4.SetPadded(true)
+		hbox1.Append(form4, false)
+		form4.Append("# of Epochs", epochs, false)
+
+		// learning rate
+		lrate := ui.NewEntry()
+		s := strconv.FormatFloat(windowData.Models[m.ModelID].LearningRate, 'g', -1, 64)
+		lrate.SetText(s)
+		lrate.OnChanged(func(*ui.Entry) {
+			f, err := strconv.ParseFloat(lrate.Text(), 64)
+			if err == nil {
+				windowData.Models[m.ModelID].LearningRate = f
+			} else {
+				ui.MsgBoxError(mainwin,
+					"Not a Number.",
+					"Please enter a numerical value.")
+				lrate.SetText("")
+			}
+		})
+
+		form5 := ui.NewForm()
+		form5.SetPadded(true)
+		hbox1.Append(form5, false)
+		form5.Append("Learning Rate", lrate, false)
+
+		// momentum
+		momentum := ui.NewEntry()
+		s = strconv.FormatFloat(windowData.Models[m.ModelID].Momentum, 'g', -1, 64)
+		momentum.SetText(s)
+		momentum.OnChanged(func(*ui.Entry) {
+			f, err := strconv.ParseFloat(momentum.Text(), 64)
+			if err == nil {
+				windowData.Models[m.ModelID].Momentum = f
+			} else {
+				ui.MsgBoxError(mainwin,
+					"Not a Number.",
+					"Please enter a numerical value.")
+				momentum.SetText("")
+			}
+		})
+
+		form6 := ui.NewForm()
+		form6.SetPadded(true)
+		hbox1.Append(form6, false)
+		form6.Append("Momentum", momentum, false)
 	} else if m.Name == "Model 2" {
 		hbox1 := ui.NewHorizontalBox()
 		hbox1.SetPadded(true)
@@ -216,9 +354,9 @@ func makeModelParam(m ModelConfig) ui.Control {
 		form2.Append("numLayers", layers, false)
 
 		lrate := ui.NewEntry()
-		lrate.SetText(windowData.Models[m.ModelID].LearningRate)
+		lrate.SetText(windowData.Models[m.ModelID].Learning)
 		lrate.OnChanged(func(*ui.Entry) {
-			windowData.Models[m.ModelID].LearningRate = lrate.Text()
+			windowData.Models[m.ModelID].Learning = lrate.Text()
 		})
 
 		form1 := ui.NewForm()
@@ -430,7 +568,7 @@ func makeToolbar2() ui.Control {
 }
 
 func setupUI() {
-	mainwin = ui.NewWindow("libui Control Gallery", 640, 480, true)
+	mainwin = ui.NewWindow("libui Control Gallery", 1800, 900, true)
 	windowData.Models = make([]ModelConfig, 5)
 	windowData.ModelCount = 0
 	mainwin.OnClosing(func(*ui.Window) bool {
