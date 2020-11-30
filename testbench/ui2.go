@@ -393,7 +393,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 		form2.Append("maxDepth", maxDepth, false)
 	}
 
-	form.Append("Alignment", alignment, false)
+	form.Append("Model", alignment, false)
 
 	return hbox
 }

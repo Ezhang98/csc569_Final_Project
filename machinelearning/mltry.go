@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 	// "github.com/dathoangnd/gonet"
-	"github.com/navossoc/bayesian"
-	// "github.com/cdipaolo/goml/cluster"
+	"github.com/cdipaolo/goml/cluster"
+	"github.com/cdipaolo/goml/linear"
 )
 
 
@@ -74,12 +74,67 @@ func main() {
 	timer := time.Now()
 	// parseCSV("../datasets/exams.csv")
 	data := parseCSV("../datasets/exams.csv")
-	
-	dic := make(map[float64]bool)
-	for i := 0; i < len(data);i++{
-		dic[data[i][1][0]] = true
+	// initialize data
+	threeDLineX = [][]float64{}
+	threeDLineY = []float64{}
+	// the line z = 10 + (x/10) + (y/5)
+	for i := -10; i < 10; i++ {
+		for j := -10; j < 10; j++ {
+			threeDLineX = append(threeDLineX, []float64{float64(i), float64(j)})
+			threeDLineY = append(threeDLineY, 10+float64(i)/10+float64(j)/5)
+		}
 	}
-	fmt.Println(dic)
+
+	// initialize model
+	//
+	// use optimization method of Stochastic Gradient Ascent
+	// use α (learning rate) = .0001 / 1e-4
+	// use λ (regularization term) = 13.06
+	// set the max iteration cap for gradient
+	//     descent to be 1000/1e3 iterations
+	// and finally pass in the data
+	model, err := linear.NewLeastSquares(base.StochasticGA, 1e-4, 13.06, 1e3, threeDLineX, threeDLineY)
+	if err != nil {
+		panic("Your training set (either x or y) was nil/zero length")
+	}
+
+	// learn
+	err = model.Learn()
+	if err != nil {
+		panic("There was some error learning")
+	}
+
+	// predict based on model
+	guess, err = model.Predict([]float64{12.016, 6.523})
+	if err != nil {
+		panic("There was some error in the prediction")
+	}
+
+	// persist the model to disk
+	//
+	// path to file will be '/tmp/.goml/LeastSquares'
+	// and it stores the parameter vector θ as a JSON
+	// array
+	err = model.PersistToFile("/tmp/.goml/LeastSquares")
+	if err != nil {
+		panic("There was some error persisting the model to a file!")
+	}
+
+	// restore the model from file
+	//
+	// note that you could have a file with a JSON
+	// array of floats from some other tool and it
+	// would import correctly as well
+	err = model.RestoreFromFile("/tmp/.goml/LeastSquares")
+	if err != nil {
+		panic("There was some error persisting the model to a file!")
+	}
+	// 
+	// dic := make(map[float64]bool)
+	// for i := 0; i < len(data);i++{
+	// 	dic[data[i][1][0]] = true
+	// }
+	// fmt.Println(dic)
 	// model := NewKMeans(4, 15, data[0])
 
 	// if model.Learn() != nil {
