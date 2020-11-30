@@ -40,26 +40,22 @@ type MasterData struct {
 	log 				[]string
 	hb1					[]chan [][]int64
 	hb2 				[]chan [][]int64
-	test 			[][][]float64
-	training		[][][]float64
+	test 				[][][]float64
+	training			[][][]float64
 }
 
-type NeuralNet struct {
-	inputNodes   	int
-	hiddenLayers 	[]int
-	outputLayer		int
-	numEpochs		int
-	learningRate	float64
-	momentum		float64
-	test 			[][][]float64
-	training		[][][]float64
+type UIWindow struct {
+	TrainData  string
+	TestData   string
+	ModelCount int
+	Models     []ModelConfig
 }
 
 type ModelConfig struct {
 	ModelID int
 	Name    string
 	Model1Params
-	Model2Params
+	NeuralNet
 	Model3Params
 }
 
@@ -68,9 +64,9 @@ type Model1Params struct {
 	Nodes      int
 }
 
-type Model2Params struct {
+type NeuralNet struct {
 	inputNodes   	int
-	hiddenLayers 	[]int
+	numHiddenLayers 	int
 	outputLayer		int
 	numEpochs		int
 	learningRate	float64
@@ -108,7 +104,7 @@ func launchServers(userInput string) {
 	mrData.replies = make([]chan string, mrData.numWorkers)		// master <- worker : worker reply for task completion
 	mrData.corpses = make(chan []bool, mrData.numWorkers)		// master <- heartbeat : workers that have died
 	mrData.working = make([]string, mrData.numWorkers)			// which tasks assigned to which workers
-	mrData.finished = make([]string, len(mrData.models))		// which shared have completed
+	mrData.finished = make([]string, len(mrData.models))		// which models have completed
 	
 	var hb1 = make([]chan [][]int64, mrData.numWorkers+3)		// heartbeat channels to neighbors for read
 	var hb2 = make([]chan [][]int64, mrData.numWorkers+3)		// heartbeat channels to neighbors for write
@@ -230,7 +226,7 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 
 func distributeTasks(mrData MasterData) MasterData {
 	count := 0
-	shardnumber := 0
+	modelNumber := 0
 	loop := true
 
 	fmt.Println("Distributing Tasks Started...")
@@ -240,11 +236,11 @@ func distributeTasks(mrData MasterData) MasterData {
 			if mrData.working[i] == "" {
 				for j := 0; j < len(mrData.models); j++ {
 					if mrData.finished[j] == "not started" {
-						shardnumber = j
+						modelNumber = j
 						mrData.finished[j] = "started"
-						mrData.request[i] <- ("m_" + strconv.Itoa(shardnumber) + "_" + strconv.Itoa(i))
-						mrData.contents[i] <- (mrData.arrShards[shardnumber])
-						mrData.working[i] = strconv.Itoa(shardnumber)
+						mrData.request[i] <- ("m_" + strconv.Itoa(modelNumber))
+						mrData.contents[i] <- (mrData.models[modelNumber])
+						mrData.working[i] = strconv.Itoa(modelNumber)
 						break
 					}
 				}
@@ -256,8 +252,8 @@ func distributeTasks(mrData MasterData) MasterData {
 				replied := strings.Split(message, "_")
 				workerID, _ := strconv.Atoi(replied[1])
 				mrData.working[workerID] = ""
-				shardID, _ := strconv.Atoi(replied[0])
-				mrData.finished[shardID] = "finished"
+				modelID, _ := strconv.Atoi(replied[0])
+				mrData.finished[modelID] = "finished"
 				count++
 			case coffins := <-mrData.corpses:
 				for j := 0; j < mrData.numWorkers; j++ {
@@ -268,8 +264,8 @@ func distributeTasks(mrData MasterData) MasterData {
 						mrData.contents[j] = make(chan string)
 						mrData.replies[j] = make(chan string)
 						go worker(mrData.request[j], mrData.contents[j], mrData.replies[j], mrData.hb1, mrData.hb2, j)
-						tempShardID, _ := strconv.Atoi(mrData.working[j])
-						mrData.finished[tempShardID] = "not started"
+						tempModelID, _ := strconv.Atoi(mrData.working[j])
+						mrData.finished[tempModelID] = "not started"
 						mrData.working[j] = ""
 						coffins[j] = false
 					}
@@ -278,8 +274,8 @@ func distributeTasks(mrData MasterData) MasterData {
 			}
 		}
 		
-		// checks that all shards are completed
-		if count >= mrData.numShards {
+		// checks that all models have completed
+		if count >= mrData.modelNumber {
 			check := true
 			
 			for a := 0; a < mrData.numWorkers; a++ {
@@ -309,8 +305,8 @@ func worker(master chan string, content chan string, reply chan string,  hb1 []c
 			return
 		}
 		if tasks[0] == "m" {
-			shard := <-content
-			mapper(tasks[1], shard)
+			x := <-content
+			distributeTasks(x)
 		} 
 		reply <- tasks[1] + "_" + tasks[2]
 	}
@@ -400,6 +396,8 @@ func runNeuralNet(training [][][]float64, test [][][]float64, inputNodes int, hi
 	// 2 hidden layers with 4 nodes each []int{4, 4}
 	// 1 node in the output layer
 	// The problem is classification, not regression
+
+	// initialize hiddenlayers
 	nn := gonet.New(inputNodes, hiddenLayers, outputLayer, false)
 
 	// Train the network
@@ -575,7 +573,7 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 				
 			} else if currentStep == "step load" {
 				// master load
-				mrData = loadShards(mrData)
+				mrData = distributeTasks(mrData)
 				currentStep = "step working"
 				mrData.log = append(mrData.log, currentStep)
 				
