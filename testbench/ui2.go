@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
@@ -677,13 +678,35 @@ func runNN() {
 		nn5 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
 		nn6 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
 
+		fmt.Println("Training Default")
+		timer := time.Now()
 		nn0.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
+		fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
+		timer = time.Now()
+		fmt.Println("Training with Decreased Epochs")
+		timer = time.Now()
 		nn1.Train(train, m.NumEpochs/2, m.LearningRate, m.Momentum, true)
+		fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Increased Epochs")
+		timer = time.Now()
 		nn2.Train(train, m.NumEpochs*2, m.LearningRate, m.Momentum, true)
+		fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Decreased Learning Rate")
+		timer = time.Now()
 		nn3.Train(train, m.NumEpochs, m.LearningRate/2, m.Momentum, true)
+		fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Increased Learning Rate")
+		timer = time.Now()
 		nn4.Train(train, m.NumEpochs, m.LearningRate*2, m.Momentum, true)
+		fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Decreased Momentum")
+		timer = time.Now()
 		nn5.Train(train, m.NumEpochs, m.LearningRate, m.Momentum/2, true)
+		fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Increased Momentum")
+		timer = time.Now()
 		nn6.Train(train, m.NumEpochs, m.LearningRate, m.Momentum*2, true)
+		fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
 
 		// Predict
 		totalcorrect0 := 0.0
