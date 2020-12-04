@@ -120,13 +120,9 @@ func main() {
 			totalcorrect += 1.0
 		}
 	}
-<<<<<<< HEAD
 	fmt.Printf("Percent correct: %.2f percent\n", totalcorrect/float64(len(test)) * 100.0)
 
 
-=======
-	fmt.Printf("Percent correct: %.2f %\n", totalcorrect/float64(len(test))*100.0)
->>>>>>> 7dccea69359a73d808328c9fa13468a6b9af26df
 
 	// Save the model
 	// nn.Save("model.json")

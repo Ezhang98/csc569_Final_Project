@@ -17,7 +17,7 @@ import (
 	// "path/filepath"
 	// "plugin"
 	// "sort"
-
+	"math/rand"
 	"bufio"
 	"encoding/csv"
 	"strconv"
@@ -46,8 +46,8 @@ type MasterData struct {
 	log             []string
 	hb1             []chan [][]int64
 	hb2             []chan [][]int64
-	test            [][][]float64
-	training        [][][]float64
+	test            []chan [][][]float64
+	training        []chan [][][]float64
 }
 
 type UIWindow struct {
@@ -60,18 +60,7 @@ type UIWindow struct {
 type ModelConfig struct {
 	ModelID int
 	Name    string
-	Model1Params
 	NeuralNet
-	Model3Params
-}
-
-type Model1Params struct {
-	Activation int
-	Nodes      int
-}
-
-type NeuralNet struct {
-	inputNodes      int
 	numHiddenLayers int
 	outputLayer     int
 	numEpochs       int
@@ -79,13 +68,17 @@ type NeuralNet struct {
 	momentum        float64
 }
 
-type Model3Params struct {
-	Trees    int
-	MaxDepth int
+type NeuralNet struct {
+	numHiddenLayers int
+	outputLayer     int
+	numEpochs       int
+	learningRate    float64
+	momentum        float64
 }
 
+
 func main() {
-	//timer := time.Now()
+	// timer := time.Now()
 
 	// check command line arguments
 	if len(os.Args) < 2 {
@@ -97,7 +90,7 @@ func main() {
 	launchServers(os.Args[1])
 
 	// customize number of nodes to run a system on? on UI
-	//fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
+	// fmt.Printf("\nRuntime: %.5f seconds\n", time.Since(timer).Seconds())
 }
 
 // Launches nodes and creates MasterData structure
@@ -111,7 +104,8 @@ func launchServers(userInput string) {
 	mrData.replies = make([]chan string, mrData.numWorkers)      // master <- worker : worker reply for task completion
 	mrData.corpses = make(chan []bool, mrData.numWorkers)        // master <- heartbeat : workers that have died
 	mrData.working = make([]string, mrData.numWorkers)           // which tasks assigned to which workers
-	mrData.finished = make([]string, len(mrData.models))         // which models have completed
+	mrData.training = make([]chan [][][]float64, mrData.numWorkers)      
+	mrData.test = make([]chan [][][]float64, mrData.numWorkers)      
 
 	var hb1 = make([]chan [][]int64, mrData.numWorkers+3) // heartbeat channels to neighbors for read
 	var hb2 = make([]chan [][]int64, mrData.numWorkers+3) // heartbeat channels to neighbors for write
@@ -130,6 +124,9 @@ func launchServers(userInput string) {
 		mrData.request[k] = make(chan ModelConfig)
 		mrData.replies[k] = make(chan string)
 		mrData.working[k] = ""
+		mrData.commands[k] = make(chan string)
+		mrData.training[k] = make(chan [][][]float64)
+		mrData.test[k] = make(chan [][][]float64)
 	}
 
 	// initialize shadowMasters
@@ -140,10 +137,25 @@ func launchServers(userInput string) {
 		mrData.toShadowMasters[j] = make(chan string, 10)
 	}
 
+	mrData.models = make([]ModelConfig, 4)
+	for i := 0; i < 4; i ++{
+		var newModel ModelConfig
+		mrData.models[i] = newModel
+		mrData.models[i].ModelID = i
+		mrData.models[i].numHiddenLayers = rand.Intn(5) 
+		mrData.models[i].numEpochs = rand.Intn(20)
+		mrData.models[i].learningRate = rand.Float64()
+		mrData.models[i].momentum = rand.Float64()
+	}
+
+
 	// start nodes
 	masterlog := make([]string, 0)
+	
 	go master(mrData, hb1, hb2, masterlog, killMaster)
+
 	go shadowMaster(mrData.toShadowMasters[0], hb1, hb2, mrData.numWorkers, mrData.numWorkers+1, mrData, killMaster)
+
 	go shadowMaster(mrData.toShadowMasters[1], hb1, hb2, mrData.numWorkers, mrData.numWorkers+2, mrData, killMaster)
 
 	// wait here until "q" is entered from the command line
@@ -158,24 +170,25 @@ func launchServers(userInput string) {
 
 // Master node
 func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log []string, killMaster chan string) {
+	fmt.Println("i am here")
 	// initialize variables
 	currentStep := "step start"
 	mrData.log = log
-	killHB := make(chan string, 10)
+	killHB := make(chan string, numWorkers)
 	message := ""
-
+	
 	// Master Recovery: resume step after Master failure
 	for i := 0; i < len(log); i++ {
-		if log[i][0:4] == "step" {
+		if len(log[i]) >=4 && log[i][0:4] == "step" {
 			currentStep = log[i]
 		}
 	}
-
+	
 	// Run master heartbeat
 	go masterHeartbeat(hb1, hb2, mrData.numWorkers, mrData.corpses, killHB, killMaster, mrData)
 
-	// fmt.Println("Master running: ", currentStep) // print in UI
 	for {
+		fmt.Println("Master running: ", currentStep) // print in UI
 		if currentStep == "step start" {
 			// If master died partway through launching workers, find the last logged k and start from there
 			k := 0
@@ -185,9 +198,11 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 					k, _ = strconv.Atoi(last[2])
 				}
 			}
+			fmt.Println(mrData.numWorkers)
 			for ; k < mrData.numWorkers; k++ {
-				go worker(mrData.request[k], mrData.commands[k], mrData.replies[k], hb1, hb2, k)
-				// message = fmt.Sprintf("launch worker %s", k)
+				go worker(mrData.training[k], mrData.test[k], mrData.request[k], mrData.commands[k], mrData.replies[k], hb1, hb2, k)
+				fmt.Printf("launch worker %d\n", k)
+				message = fmt.Sprintf("launch worker %s", k)
 				mrData.log = append(mrData.log, currentStep) //appends launch worker step to log
 				mrData.toShadowMasters[0] <- message         //sends launch worker message to first Shadow Master channel
 				mrData.toShadowMasters[1] <- message         //sends launch worker message to second Shadow Master channel
@@ -196,22 +211,25 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 			mrData.log = append(mrData.log, currentStep) //appends load step to log
 			mrData.toShadowMasters[0] <- currentStep     //sends load message to first Shadow Master channel
 			mrData.toShadowMasters[1] <- currentStep     //sends load message to second Shadow Master channel
-			killHB <- "die"
-			return
 
 		} else if currentStep == "step working" {
 			// manage the distributeTasks step
-			trainpath := "../datasets/mnist_train.csv"
-			testpath := "../datasets/mnist_test.csv"
-			mrData.training = parseCSV(trainpath)
-			mrData.test = parseCSV(testpath)
+			trainpath := "datasets/mnist_test.csv"
+			testpath := "datasets/mnist_train_short.csv"
+			trainingdata := parseCSV(trainpath)
+			testdata := parseCSV(testpath)
+			fmt.Println("starting getting data")
+			for k:= 0 ; k < mrData.numWorkers; k++ {
+				fmt.Println("sending to worker", k)
+				mrData.training[k] <- trainingdata
+				mrData.test[k] <- testdata
+			}
+			fmt.Println("finished loading data")
 			mrData = distributeTasks(mrData)
 			currentStep = "step cleanup"
 			mrData.log = append(mrData.log, currentStep) //appends master distributeTasks step to log
 			mrData.toShadowMasters[0] <- currentStep     //sends distributeTasks message to first Shadow Master channel
 			mrData.toShadowMasters[1] <- currentStep     //sends distributeTasks message to second Shadow Master channel
-			killHB <- "die"
-			return
 
 		} else if currentStep == "step cleanup" {
 			// cleanup workers who should now be done with all tasks
@@ -220,8 +238,6 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 			mrData.log = append(mrData.log, currentStep) //appends end message to log
 			mrData.toShadowMasters[0] <- currentStep     //sends end message to first Shadow Master channel
 			mrData.toShadowMasters[1] <- currentStep     //sends end message to second Shadow Master channel
-			killHB <- "die"
-			return
 		} else {
 			break
 		}
@@ -232,25 +248,29 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 
 func distributeTasks(mrData MasterData) MasterData {
 	count := 0
-	modelNumber := 0
 	loop := true
 
 	fmt.Println("Distributing Tasks Started...")
+	mrData.finished = make([]string, len(mrData.models))         // which models have completed
+	for j := 0; j < len(mrData.models); j++ {
+		mrData.finished[j] = "not started"
+	}
 	for loop {
 		for i := 0; i < mrData.numWorkers; i++ {
 			// checks for available workers
 			if mrData.working[i] == "" {
 				for j := 0; j < len(mrData.models); j++ {
 					if mrData.finished[j] == "not started" {
-						modelNumber = j
 						mrData.finished[j] = "started"
-						mrData.request[i] <- (mrData.models[modelNumber])
-						mrData.working[i] = strconv.Itoa(modelNumber)
+						mrData.commands[i] <- "m"
+						mrData.request[i] <- (mrData.models[j])
+						mrData.working[i] = strconv.Itoa(j)
+
 						break
 					}
+
 				}
 			}
-
 			// checks for replies and dead workers
 			select {
 			case message := <-mrData.replies[i]:
@@ -267,7 +287,7 @@ func distributeTasks(mrData MasterData) MasterData {
 						mrData.hb2[j] = make(chan [][]int64, numWorkers+3)
 						mrData.request[j] = make(chan ModelConfig)
 						mrData.replies[j] = make(chan string)
-						go worker(mrData.request[j], mrData.commands[j], mrData.replies[j], mrData.hb1, mrData.hb2, j)
+						go worker(mrData.training[j], mrData.test[j], mrData.request[j], mrData.commands[j], mrData.replies[j], mrData.hb1, mrData.hb2, j)
 						tempModelID, _ := strconv.Atoi(mrData.working[j])
 						mrData.finished[tempModelID] = "not started"
 						mrData.working[j] = ""
@@ -296,22 +316,29 @@ func distributeTasks(mrData MasterData) MasterData {
 	return mrData
 }
 
-func worker(master chan ModelConfig, commands chan string, reply chan string, hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
+func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan ModelConfig, commands chan string, reply chan string, hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
 	go heartbeat(hb1, hb2, k)
 	task := ""
+	var trainingdata [][][]float64
+	var testdata [][][]float64
+	var indivModel ModelConfig
 	for {
 		// read task from channel
+		trainingdata =  <-train
+		testdata = <-test
 		task = <-commands
+		fmt.Println("recieved command")
+		indivModel = <-frommaster
 		tasks := strings.Split(task, "_")
 		if tasks[0] == "end" {
 			reply <- tasks[2]
 			return
 		}
 		if tasks[0] == "m" {
-			indivModel := <-master
-			runModelType(indivModel)
+			fmt.Print("started task")
+			runNeuralNetwork(indivModel, trainingdata, testdata)
 		}
-		reply <- tasks[1] + "_" + tasks[2]
+		reply <- strconv.Itoa(k) + "_" +strconv.Itoa(indivModel.ModelID)
 	}
 }
 
@@ -327,13 +354,64 @@ func cleanup(mrData MasterData) MasterData {
 	return mrData
 }
 
-func runModelType(model ModelConfig) {
+func runNeuralNetwork(model ModelConfig, train [][][]float64, test [][][]float64) {
 
-	switch model.Name {
-	case "neuralnet":
-		runNeuralNet(x)
-	default:
+	// train := parseCSV("../datasets/mnist_train_short.csv")
+	// test := parseCSV("../datasets/mnist_train_short.csv")
+	// train := parseCSV("../datasets/exams.csv")
+	// test := parseCSV("../datasets/exam.csv")
+
+	// Create a neural network
+	// 2 nodes in the input layer
+	// 2 hidden layers with 4 nodes each
+	// 1 node in the output layer
+	// The problem is classification, not regression
+	
+	fmt.Println("running network", model.ModelID)
+	nn := gonet.New(len(train[0][0]), []int{100, 32}, 10, true)
+
+	// Train the network
+	// Run for 3000 epochs
+	// The learning rate is 0.4 and the momentum factor is 0.2
+	// Enable debug mode to log learning error every 1000 iterations
+	nn.Train(train, model.numEpochs, model.learningRate, model.momentum, true)
+
+	// Predict
+	totalcorrect := 0.0
+	for i := 0; i < len(test); i++ {
+		// fmt.Print(MinMax(test[i][1]), " ", MinMax(nn.Predict(test[i][0])), " | ")
+		// if i%15 == 0{
+		// 	fmt.Println()
+		// }
+
+		if MinMax(test[i][1]) == MinMax(nn.Predict(test[i][0])) {
+			totalcorrect += 1.0
+		}
 	}
+	printModelParam(model)
+	fmt.Printf("Model %d : Percent correct: %.2f percent\n", model.ModelID, totalcorrect/float64(len(test)) * 100.0)
+
+	// // Save the model
+	// nn.Save("model.json")
+
+	// // Load the model
+	// nn2, err := gonet.Load("model.json")
+	// if err != nil {
+	// 	log.Fatal("Load model failed.")
+	// }
+
+}
+
+func MinMax(array []float64) int {
+	index := 0
+	max := 0.0
+	for i, value := range array {
+		if max < value {
+			index = i
+			max = value
+		}
+	}
+	return index
 }
 
 // Helper function to find max
@@ -354,38 +432,42 @@ func parseCSV(path string) [][][]float64 {
 	}
 
 	r := csv.NewReader(csvfile)
+
 	index := 0
 
 	// Parse Data
 	for {
 		// Read each record from csv
 		record, err := r.Read()
-		if index != 0 {
-			floatarr := make([]float64, len(record)+1)
-			expected := make([]float64, 1)
+		if index != 0 && len(record) > 1 {
+			floatarr := make([]float64, len(record)-1)
+			expected := make([]float64, 10)
 			for i := 0; i < len(record); i++ {
 				if s, err := strconv.ParseFloat(record[i], 64); err == nil {
-					if i == 0 {
-						expected[0] = s
-					} else {
-						floatarr[i] = s
-					}
 					// fmt.Println(s)
+					if i == 0 {
+						expected[int(s)] = 1
+					} else {
+						floatarr[i-1] = s
+					}
+
 				}
 			}
-			if len(floatarr[1:]) == 0 {
+			if len(floatarr) == 0 {
 				break
 			}
-			one_entry := [][]float64{floatarr[1:], expected}
+			// fmt.Println(expected)
+			one_entry := [][]float64{floatarr, expected}
 
 			data = append(data, one_entry)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
-			// fmt.Println(index)
+			// fmt.Println(one_entry)
+
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
 		}
 		index++
 	}
@@ -393,40 +475,9 @@ func parseCSV(path string) [][][]float64 {
 	return data
 }
 
-func runNeuralNet(training [][][]float64, test [][][]float64, inputNodes int, hiddenLayers []int, outputLayer int, numEpochs int, learningRate float64, momentum float64) {
-	// Create a neural network
-	// 2 nodes in the input layer
-	// 2 hidden layers with 4 nodes each []int{4, 4}
-	// 1 node in the output layer
-	// The problem is classification, not regression
-
-	// initialize hiddenlayers
-	nn := gonet.New(inputNodes, hiddenLayers, outputLayer, false)
-
-	// Train the network
-	// Run for 3000 epochs
-	// The learning rate is 0.4 and the momentum factor is 0.2
-	// Enable debug mode to log learning error every 1000 iterations
-	nn.Train(training, numEpochs, learningRate, momentum, true)
-
-	// Predict
-	totalcorrect := 0.0
-	for i = 0; i < len(test); i++ {
-		if nn.Predict(test[i]) == test[i][1][0] {
-			totalcorrect++
-		}
-	}
-	fmt.Printf("Percent correct: %f\n", totalcorrect/len(test))
-
-	// // Save the model
-	// nn.Save("model.json")
-	// // Load the model
-	// nn2, err := gonet.Load("model.json")
-	// if err != nil {
-	// 	log.Fatal("Load model failed.")
-	// }
-	// fmt.Printf("%f XOR %f => %f\n", testInput[0], testInput[1], nn2.Predict(testInput)[0])
-	// // 1.000000 XOR 0.000000 => 0.943074
+func printModelParam(model ModelConfig){
+	fmt.Println("ID", model.ModelID, ", epochs", model.numEpochs, ", learning rate", model.learningRate,
+				", momentum", model.momentum, ", hidden layers", model.numHiddenLayers)
 }
 
 // Update heartbeat tables for Master, 2 ShadowMasters and 8 workers
@@ -519,6 +570,8 @@ func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses 
 	currentTable := make([][]int64, numWorkers+3)
 	previousTable := make([][]int64, numWorkers+3)
 
+	fmt.Println("master heartbeat started")
+
 	// initialize hbtable
 	for i := 0; i < numWorkers+3; i++ {
 		currentTable[i] = make([]int64, 2)
@@ -529,7 +582,7 @@ func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses 
 		previousTable[i][1] = now
 	}
 	deadWorkers := make([]bool, numWorkers+3)
-	for i := 0; i < 8; i++ {
+	for i := 0; i < numWorkers+3; i++ {
 		deadWorkers[i] = false
 	}
 	for {
@@ -558,6 +611,7 @@ func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses 
 		corpses <- deadWorkers
 		counter++
 	}
+	fmt.Println("master heartbeat ended")
 }
 
 // Shadow Master Node
@@ -620,7 +674,7 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 	previousTable := make([][]int64, numWorkers+3)
 
 	// initialize hbtable
-	for i := 0; i < 11; i++ {
+	for i := 0; i < numWorkers+3; i++ {
 		currentTable[i] = make([]int64, 2)
 		previousTable[i] = make([]int64, 2)
 		currentTable[i][0] = 0
