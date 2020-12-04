@@ -37,21 +37,22 @@ func parseCSV(path string) [][][]float64{
 		record, err := r.Read()
 		if index != 0 && len(record) > 1{
 			floatarr := make([]float64, len(record) - 1)
-			expected := make([]float64, 1)
+			expected := make([]float64, 10)
 			for i := 0; i < len(record); i++ {
 				if s, err := strconv.ParseFloat(record[i], 64); err == nil {
+					// fmt.Println(s)
 					if i == 0{
-						expected[0] = s
+						expected[int(s)] = 1
 					}else{
 						floatarr[i - 1] = s
 					}
-					// fmt.Println(s)
+				
 				}
 			}
 			if len(floatarr) == 0{
 				break
 			}
-			
+			fmt.Println(expected)
 			one_entry := [][]float64{floatarr, expected}
 			
 			data = append(data, one_entry)
@@ -98,7 +99,7 @@ func main() {
 	// The problem is classification, not regression
 	
 	fmt.Println("size of input", len(train[0][0]))
-	nn := gonet.New(len(train[0][0]), []int{100, 50, 25}, 1, false)
+	nn := gonet.New(len(train[0][0]), []int{100, 50, 25}, 10, true)
 	// func New(nInputs int, nHiddens []int, nOutputs int, isRegression bool) NN
 	// Train the network
 	// Run for 3000 epochs
@@ -109,13 +110,15 @@ func main() {
 	// Predict
 	totalcorrect := 0.0
 	for i := 0; i < len(test); i++ {
-		// fmt.Println(test[i][0])
-		fmt.Printf("actual: %f, predicted: %f\n", test[i][1][0], nn.Predict(test[i][0]))
-		if nn.Predict(test[i][0])[0] == test[i][1][0]{
+		// fmt.Println("expected", MinMax(test[i][1]))
+		// fmt.Println("predicted", MinMax(nn.Predict(test[i][0])))
+		// fmt.Printf("actual: %d, predicted: %d\n", MinMax(test[i][1][0])[1], MinMax(nn.Predict(test[i][0]))[1])
+		
+		if (MinMax(test[i][1]) == MinMax(nn.Predict(test[i][0]))){
 			totalcorrect += 1.0
 		}
 	}
-	fmt.Printf("Percent correct: %f\n", totalcorrect/float64(len(test)))
+	fmt.Printf("Percent correct: %.2f %\n", totalcorrect/float64(len(test)) * 100.0)
 
 
 
@@ -132,4 +135,15 @@ func main() {
 
 
 
+}
+func MinMax(array []float64) int {
+	index := 0
+	max := 0.0
+    for i, value := range array {
+        if max < value {
+			index = i
+			max = value
+        }
+    }
+    return index
 }
