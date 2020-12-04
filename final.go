@@ -2,7 +2,7 @@
 // Distributed System for Tuning Hyperparameters of Neural Networks
 // PAXOS election, consensus, and recovery algorithm
 
-package main
+package paxos
 
 import (
 	// "encoding/json"

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"strconv"
+	"paxos"
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
 )
