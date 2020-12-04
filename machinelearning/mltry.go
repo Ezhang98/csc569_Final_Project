@@ -52,7 +52,7 @@ func parseCSV(path string) [][][]float64{
 			if len(floatarr) == 0{
 				break
 			}
-			fmt.Println(expected)
+			// fmt.Println(expected)
 			one_entry := [][]float64{floatarr, expected}
 			
 			data = append(data, one_entry)
@@ -75,8 +75,8 @@ func parseCSV(path string) [][][]float64{
 
 func main() {
 
-	train := parseCSV("../datasets/mnist_train.csv")
-	test := parseCSV("../datasets/mnist_test.csv")
+	train := parseCSV("../datasets/mnist_train_short.csv")
+	test := parseCSV("../datasets/mnist_train_short.csv")
 	// train := parseCSV("../datasets/exams.csv")
 	// test := parseCSV("../datasets/exam.csv")
 	// XOR traning data
@@ -98,19 +98,22 @@ func main() {
 	// 1 node in the output layer
 	// The problem is classification, not regression
 	
-	fmt.Println("size of input", len(train[0][0]))
-	nn := gonet.New(len(train[0][0]), []int{100, 50, 25}, 10, true)
+	// fmt.Println("size of input", len(train[0][0]))
+	nn := gonet.New(len(train[0][0]), []int{100, 32}, 10, true)
 	// func New(nInputs int, nHiddens []int, nOutputs int, isRegression bool) NN
 	// Train the network
 	// Run for 3000 epochs
 	// The learning rate is 0.4 and the momentum factor is 0.2
 	// Enable debug mode to log learning error every 1000 iterations
-	nn.Train(train, 20, 0.1, 0.2, true)
+	nn.Train(train, 30, 0.2, 0.2, true)
 
 	// Predict
 	totalcorrect := 0.0
 	for i := 0; i < len(test); i++ {
-		// fmt.Println("expected", MinMax(test[i][1]))
+		fmt.Print(MinMax(test[i][1]), " ", MinMax(nn.Predict(test[i][0])), " | ")
+		if i%15 == 0{
+			fmt.Println()
+		}
 		// fmt.Println("predicted", MinMax(nn.Predict(test[i][0])))
 		// fmt.Printf("actual: %d, predicted: %d\n", MinMax(test[i][1][0])[1], MinMax(nn.Predict(test[i][0]))[1])
 		
@@ -118,11 +121,11 @@ func main() {
 			totalcorrect += 1.0
 		}
 	}
-	fmt.Printf("Percent correct: %.2f %\n", totalcorrect/float64(len(test)) * 100.0)
+	fmt.Printf("Percent correct: %.2f percent\n", totalcorrect/float64(len(test)) * 100.0)
 
 
 
-	// // Save the model
+	// Save the model
 	// nn.Save("model.json")
 
 	// // Load the model
