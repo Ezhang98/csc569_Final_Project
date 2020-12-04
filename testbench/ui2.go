@@ -1,12 +1,19 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
+	"github.com/dathoangnd/gonet"
 )
 
 type UIWindow struct {
@@ -522,9 +529,7 @@ func makeToolbar2() ui.Control {
 
 	button = ui.NewButton("Run Models")
 	button.OnClicked(func(*ui.Button) {
-		ui.MsgBoxError(mainwin,
-			"This message box describes an error.",
-			"More detailed information can be shown here.")
+		runNN()
 	})
 	msggrid.Append(button,
 		4, 0, 1, 1,
@@ -539,6 +544,7 @@ func makeToolbar2() ui.Control {
 			filename = "(cancelled)"
 		}
 		entry.SetText(filename)
+		windowData.TrainData = filename
 	})
 	grid.Append(button,
 		0, 0, 1, 1,
@@ -556,6 +562,7 @@ func makeToolbar2() ui.Control {
 			filename = "(cancelled)"
 		}
 		entry1.SetText(filename)
+		windowData.TestData = filename
 	})
 	grid.Append(button1,
 		0, 1, 1, 1,
@@ -583,6 +590,126 @@ func setupUI() {
 	mainwin.SetChild(makeToolbar2())
 
 	mainwin.Show()
+}
+
+func parseCSV(path string) [][][]float64 {
+	data := make([][][]float64, 0)
+
+	// Open the file
+
+	s := strings.Split(path, "\\")
+	fixedPath := "../datasets/" + s[len(s)-1]
+
+	csvfile, err := os.Open(fixedPath)
+	if err != nil {
+		log.Fatalln("Couldn't open the csv file", err)
+	}
+
+	r := csv.NewReader(csvfile)
+
+	index := 0
+
+	// Parse Data
+	for {
+		// Read each record from csv
+		record, err := r.Read()
+		if index != 0 && len(record) > 1 {
+			floatarr := make([]float64, len(record)-1)
+			expected := make([]float64, 10)
+			for i := 0; i < len(record); i++ {
+				if s, err := strconv.ParseFloat(record[i], 64); err == nil {
+					// fmt.Println(s)
+					if i == 0 {
+						expected[int(s)] = 1
+					} else {
+						floatarr[i-1] = s
+					}
+
+				}
+			}
+			if len(floatarr) == 0 {
+				break
+			}
+			oneEntry := [][]float64{floatarr, expected}
+
+			data = append(data, oneEntry)
+			// fmt.Println(one_entry)
+
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		index++
+	}
+	// fmt.Println(data)
+	return data
+}
+
+// index 0 [[28x28], expected_value]
+// index 1
+
+func runNN() {
+	train := parseCSV(windowData.TrainData)
+	test := parseCSV(windowData.TestData)
+
+	for i := 0; i < modelCount; i++ {
+		m := windowData.Models[i]
+		interval := (m.InputNodes - m.OutputNodes) / (m.NumHiddenLayers + 1)
+		hidden := make([]int, m.NumHiddenLayers)
+		for j := 0; j < m.NumHiddenLayers; j++ {
+			hidden[j] = m.InputNodes - (interval * (j + 1))
+		}
+
+		if m.InputNodes == 0 {
+			m.InputNodes = len(train[0][0])
+		}
+		fmt.Println("size of input", len(train[0][0]))
+		nn := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+
+		nn.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
+
+		// Predict
+		totalcorrect := 0.0
+		for i := 0; i < len(test); i++ {
+			// fmt.Println("expected", MinMax(test[i][1]))
+			// fmt.Println("predicted", MinMax(nn.Predict(test[i][0])))
+			s := fmt.Sprintf("%d, %d | ", MinMax(test[i][1]), MinMax(nn.Predict(test[i][0])))
+			fmt.Print(s)
+			if i%15 == 0 {
+				fmt.Println()
+			}
+			if MinMax(test[i][1]) == MinMax(nn.Predict(test[i][0])) {
+				totalcorrect += 1.0
+			}
+		}
+		output := fmt.Sprintf("Percent correct: %.2f %s\n", totalcorrect/float64(len(test))*100.0, "%")
+		fmt.Print(output)
+	}
+	// // Save the model
+	// nn.Save("model.json")
+
+	// // Load the model
+	// nn2, err := gonet.Load("model.json")
+	// if err != nil {
+	// 	log.Fatal("Load model failed.")
+	// }
+	// fmt.Printf("%f XOR %f => %f\n", testInput[0], testInput[1], nn2.Predict(testInput)[0])
+	// 1.000000 XOR 0.000000 => 0.943074
+
+}
+func MinMax(array []float64) int {
+	index := 0
+	max := 0.0
+	for i, value := range array {
+		if max < value {
+			index = i
+			max = value
+		}
+	}
+	return index
 }
 
 func main() {
