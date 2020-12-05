@@ -2,7 +2,7 @@
 // Distributed System for Tuning Hyperparameters of Neural Networks
 // PAXOS election, consensus, and recovery algorithm
 
-package paxos
+package main
 
 import (
 	// "encoding/json"
@@ -18,7 +18,7 @@ import (
 	// "plugin"
 	// "sort"
 	"math/rand"
-	"bufio"
+	// "bufio"
 	"encoding/csv"
 	"strconv"
 	"strings"
@@ -151,25 +151,33 @@ func launchServers(userInput string) {
 
 	// start nodes
 	masterlog := make([]string, 0)
-	
-	go master(mrData, hb1, hb2, masterlog, killMaster)
+	var endrun = make(chan string)
+	go master(mrData, hb1, hb2, masterlog, killMaster, endrun)
 
 	go shadowMaster(mrData.toShadowMasters[0], hb1, hb2, mrData.numWorkers, mrData.numWorkers+1, mrData, killMaster)
 
 	go shadowMaster(mrData.toShadowMasters[1], hb1, hb2, mrData.numWorkers, mrData.numWorkers+2, mrData, killMaster)
 
-	// wait here until "q" is entered from the command line
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		text := scanner.Text()
-		if text == "q" {
+
+	for{
+		reply := <-endrun
+		fmt.Println(reply)
+		if reply == "end"{
 			break
 		}
 	}
+	// wait here until "q" is entered from the command line
+	// scanner := bufio.NewScanner(os.Stdin)
+	// for scanner.Scan() {
+	// 	text := scanner.Text()
+	// 	if text == "q" {
+	// 		break
+	// 	}
+	// }
 }
 
 // Master node
-func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log []string, killMaster chan string) {
+func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log []string, killMaster chan string, end chan string) {
 	fmt.Println("i am here")
 	// initialize variables
 	currentStep := "step start"
@@ -233,17 +241,20 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 
 		} else if currentStep == "step cleanup" {
 			// cleanup workers who should now be done with all tasks
-			mrData = cleanup(mrData)
+			// mrData = cleanup(mrData)
+			for i := 0; i < mrData.numWorkers; i++ {
+				mrData.commands[i] <- "end"
+			}
 			currentStep = "step end"
 			mrData.log = append(mrData.log, currentStep) //appends end message to log
 			mrData.toShadowMasters[0] <- currentStep     //sends end message to first Shadow Master channel
 			mrData.toShadowMasters[1] <- currentStep     //sends end message to second Shadow Master channel
-		} else {
+			fmt.Println("Running master is done.")
+			end <- "end"
+			killHB <- "die"
 			break
 		}
 	}
-	killHB <- "die"
-	// fmt.Println("Running master has died.")
 }
 
 func distributeTasks(mrData MasterData) MasterData {
@@ -317,7 +328,8 @@ func distributeTasks(mrData MasterData) MasterData {
 }
 
 func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan ModelConfig, commands chan string, reply chan string, hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
-	go heartbeat(hb1, hb2, k)
+	var endHB = make(chan string)
+	go heartbeat(hb1, hb2, k, endHB)
 	task := ""
 	var trainingdata [][][]float64
 	var testdata [][][]float64
@@ -327,11 +339,14 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 		trainingdata =  <-train
 		testdata = <-test
 		task = <-commands
+		fmt.Println(task)
 		fmt.Println("recieved command")
 		indivModel = <-frommaster
 		tasks := strings.Split(task, "_")
 		if tasks[0] == "end" {
-			reply <- tasks[2]
+			
+			fmt.Println("ending worker", k)
+			endHB <- "end"
 			return
 		}
 		if tasks[0] == "m" {
@@ -545,7 +560,7 @@ func updateTable(index int, hbtable [][]int64, counter int, hb1 []chan [][]int64
 }
 
 // Heartbeat function for all workers
-func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
+func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan string) {
 	now := time.Now().Unix() // current local time
 	counter := 0
 	hbtable := make([][]int64, numWorkers+3)
@@ -557,9 +572,17 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
 	}
 
 	for {
+		fmt.Print("w hb ")
 		time.Sleep(100 * time.Millisecond)
 		hbtable = updateTable(k, hbtable, counter, hb1, hb2)
 		counter++
+		select {
+		case reply := <-endHB:
+			if reply == "end" {
+				return
+			}
+		default:
+		}
 	}
 }
 
@@ -600,7 +623,7 @@ func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses 
 				fmt.Println(currentTable[k][1], previousTable[i][1])
 				if i == numWorkers+1 || i == numWorkers+2 {
 					fmt.Println("Shadow master died")
-					go shadowMaster(mrData.toShadowMasters[i-numWorkers+1], mrData.hb1, mrData.hb2, mrData.numWorkers, i, mrData, killMaster)
+					go shadowMaster(mrData.toShadowMasters[i-numWorkers], mrData.hb1, mrData.hb2, mrData.numWorkers, i, mrData, killMaster)
 				} else {
 					fmt.Println("\n\n-------------------killed worker :", i, "\n")
 					deadWorkers[i] = true
@@ -626,6 +649,7 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 	for masterNotDead {
 		select {
 		case copy := <-copier:
+			fmt.Println("shadow", selfID, copy)
 			logs = append(logs, copy)
 			// check if to die
 			currentStep := copy
@@ -634,23 +658,15 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 				currentStep = "step load"
 				mrData.log = append(mrData.log, currentStep)
 
-			} else if currentStep == "step load" {
-				// master load
-				mrData = distributeTasks(mrData)
-				currentStep = "step working"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step working" {
+			}else if currentStep == "step working" {
 				// master working
 				currentStep = "step cleanup"
 				mrData.log = append(mrData.log, currentStep)
 
-			} else if currentStep == "cleanup" {
+			} else if currentStep == "step cleanup" {
 				// cleanup
 				currentStep = "step end"
 				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step end" {
 				killHB <- "kill"
 				return
 			}
@@ -660,7 +676,8 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 		}
 		if !masterNotDead {
 			fmt.Println("Shadow master becomes running master.")
-			go master(mrData, hb1, hb2, logs, kill)
+			var endrun = make(chan string)
+			go master(mrData, hb1, hb2, logs, kill, endrun)
 			masterNotDead = true
 		}
 	}
@@ -692,7 +709,7 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 		time.Sleep(100 * time.Millisecond)
 		currentTable = updateTable(selfID, previousTable, counter, hb1, hb2)
 
-		if currentTable[selfID][1]-previousTable[masterID][1] > 2 {
+		if currentTable[selfID][1]-previousTable[masterID][1] > 2{
 			if selfID == masterID+1 {
 				fmt.Println("\n----- The Running Master has died -----\n")
 				isMasterAlive <- false
@@ -702,4 +719,5 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 		previousTable = currentTable
 		counter++
 	}
+
 }

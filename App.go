@@ -1,12 +1,23 @@
+// Group Members: Evan Zhang, Alexander Garcia and Christina Monahan
+// Distributed System for Tuning Hyperparameters of Neural Networks
+// PAXOS election, consensus, and recovery algorithm
+
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
+	"os"
 	"strconv"
-	"paxos"
+	"strings"
+	"time"
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
+	"github.com/dathoangnd/gonet"
 )
 
 type UIWindow struct {
@@ -94,7 +105,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			// Momentum		float64
 
 			// # of input nodes
-			inputNodes := ui.NewSpinbox(0, 100)
+			inputNodes := ui.NewSpinbox(0, 10000)
 			inputNodes.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].InputNodes = inputNodes.Value()
 			})
@@ -105,7 +116,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			form1.Append("# Input Nodes", inputNodes, false)
 
 			// # of hidden layers
-			layers := ui.NewSpinbox(0, 100)
+			layers := ui.NewSpinbox(0, 10000)
 			layers.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].NumHiddenLayers = layers.Value()
 			})
@@ -116,7 +127,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			form2.Append("# Hidden Layers", layers, false)
 
 			// # of output nodes
-			outputNodes := ui.NewSpinbox(0, 100)
+			outputNodes := ui.NewSpinbox(0, 10000)
 			outputNodes.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].OutputNodes = outputNodes.Value()
 			})
@@ -127,7 +138,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			form3.Append("# Output Nodes", outputNodes, false)
 
 			// # of epochs
-			epochs := ui.NewSpinbox(0, 100)
+			epochs := ui.NewSpinbox(0, 10000)
 			epochs.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].NumEpochs = epochs.Value()
 			})
@@ -188,7 +199,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 				false, ui.AlignFill, false, ui.AlignFill)
 			// layers and learning rate
 
-			layers := ui.NewSpinbox(0, 100)
+			layers := ui.NewSpinbox(0, 10000)
 			layers.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].Layers = layers.Value()
 			})
@@ -217,7 +228,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 				0, 1, 1, 1,
 				false, ui.AlignFill, false, ui.AlignFill)
 			// numTrees and max depth
-			numTrees := ui.NewSpinbox(0, 100)
+			numTrees := ui.NewSpinbox(0, 10000)
 			numTrees.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].Trees = numTrees.Value()
 			})
@@ -227,7 +238,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			hbox1.Append(form1, false)
 			form1.Append("numTrees", numTrees, false)
 
-			maxDepth := ui.NewSpinbox(0, 100)
+			maxDepth := ui.NewSpinbox(0, 10000)
 			maxDepth.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].MaxDepth = maxDepth.Value()
 			})
@@ -247,7 +258,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			false, ui.AlignFill, false, ui.AlignFill)
 
 		// # of input nodes
-		inputNodes := ui.NewSpinbox(0, 100)
+		inputNodes := ui.NewSpinbox(0, 10000)
 		inputNodes.SetValue(windowData.Models[m.ModelID].InputNodes)
 		inputNodes.OnChanged(func(*ui.Spinbox) {
 			windowData.Models[m.ModelID].InputNodes = inputNodes.Value()
@@ -259,7 +270,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 		form1.Append("# Input Nodes", inputNodes, false)
 
 		// # of hidden layers
-		layers := ui.NewSpinbox(0, 100)
+		layers := ui.NewSpinbox(0, 10000)
 		layers.SetValue(windowData.Models[m.ModelID].NumHiddenLayers)
 		layers.OnChanged(func(*ui.Spinbox) {
 			windowData.Models[m.ModelID].NumHiddenLayers = layers.Value()
@@ -271,7 +282,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 		form2.Append("# Hidden Layers", layers, false)
 
 		// # of output nodes
-		outputNodes := ui.NewSpinbox(0, 100)
+		outputNodes := ui.NewSpinbox(0, 10000)
 		outputNodes.SetValue(windowData.Models[m.ModelID].OutputNodes)
 		outputNodes.OnChanged(func(*ui.Spinbox) {
 			windowData.Models[m.ModelID].OutputNodes = outputNodes.Value()
@@ -283,7 +294,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 		form3.Append("# Output Nodes", outputNodes, false)
 
 		// # of epochs
-		epochs := ui.NewSpinbox(0, 100)
+		epochs := ui.NewSpinbox(0, 10000)
 		epochs.SetValue(windowData.Models[m.ModelID].NumEpochs)
 		epochs.OnChanged(func(*ui.Spinbox) {
 			windowData.Models[m.ModelID].NumEpochs = epochs.Value()
@@ -342,7 +353,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			0, 1, 1, 1,
 			false, ui.AlignFill, false, ui.AlignFill)
 		// layers and learning rate
-		layers := ui.NewSpinbox(0, 100)
+		layers := ui.NewSpinbox(0, 10000)
 		layers.SetValue(windowData.Models[m.ModelID].Layers)
 		layers.OnChanged(func(*ui.Spinbox) {
 			windowData.Models[m.ModelID].Layers = layers.Value()
@@ -370,7 +381,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			0, 1, 1, 1,
 			false, ui.AlignFill, false, ui.AlignFill)
 		// numTrees and max depth
-		numTrees := ui.NewSpinbox(0, 100)
+		numTrees := ui.NewSpinbox(0, 10000)
 		numTrees.SetValue(windowData.Models[m.ModelID].Trees)
 		numTrees.OnChanged(func(*ui.Spinbox) {
 			windowData.Models[m.ModelID].Trees = numTrees.Value()
@@ -381,7 +392,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 		hbox1.Append(form1, false)
 		form1.Append("numTrees", numTrees, false)
 
-		maxDepth := ui.NewSpinbox(0, 100)
+		maxDepth := ui.NewSpinbox(0, 10000)
 		maxDepth.SetValue(windowData.Models[m.ModelID].MaxDepth)
 		maxDepth.OnChanged(func(*ui.Spinbox) {
 			windowData.Models[m.ModelID].MaxDepth = maxDepth.Value()
@@ -522,9 +533,7 @@ func makeToolbar2() ui.Control {
 
 	button = ui.NewButton("Run Models")
 	button.OnClicked(func(*ui.Button) {
-		ui.MsgBoxError(mainwin,
-			"This message box describes an error.",
-			"More detailed information can be shown here.")
+		runNN()
 	})
 	msggrid.Append(button,
 		4, 0, 1, 1,
@@ -539,6 +548,7 @@ func makeToolbar2() ui.Control {
 			filename = "(cancelled)"
 		}
 		entry.SetText(filename)
+		windowData.TrainData = filename
 	})
 	grid.Append(button,
 		0, 0, 1, 1,
@@ -556,6 +566,7 @@ func makeToolbar2() ui.Control {
 			filename = "(cancelled)"
 		}
 		entry1.SetText(filename)
+		windowData.TestData = filename
 	})
 	grid.Append(button1,
 		0, 1, 1, 1,
@@ -583,6 +594,192 @@ func setupUI() {
 	mainwin.SetChild(makeToolbar2())
 
 	mainwin.Show()
+}
+
+func parseCSV(path string) [][][]float64 {
+	data := make([][][]float64, 0)
+
+	// Open the file
+
+	s := strings.Split(path, "\\")
+	fixedPath := "../datasets/" + s[len(s)-1]
+
+	csvfile, err := os.Open(fixedPath)
+	if err != nil {
+		log.Fatalln("Couldn't open the csv file", err)
+	}
+
+	r := csv.NewReader(csvfile)
+
+	index := 0
+
+	// Parse Data
+	for {
+		// Read each record from csv
+		record, err := r.Read()
+		if index != 0 && len(record) > 1 {
+			floatarr := make([]float64, len(record)-1)
+			expected := make([]float64, 10)
+			for i := 0; i < len(record); i++ {
+				if s, err := strconv.ParseFloat(record[i], 64); err == nil {
+					// fmt.Println(s)
+					if i == 0 {
+						expected[int(s)] = 1
+					} else {
+						floatarr[i-1] = s
+					}
+
+				}
+			}
+			if len(floatarr) == 0 {
+				break
+			}
+			oneEntry := [][]float64{floatarr, expected}
+
+			data = append(data, oneEntry)
+			// fmt.Println(one_entry)
+
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		index++
+	}
+	// fmt.Println(data)
+	return data
+}
+
+// index 0 [[28x28], expected_value]
+// index 1
+
+func runNN() {
+	train := parseCSV(windowData.TrainData)
+	test := parseCSV(windowData.TestData)
+
+	for i := 0; i < modelCount; i++ {
+		m := windowData.Models[i]
+		//interval := (m.InputNodes - m.OutputNodes) / (m.NumHiddenLayers + 1)
+		hidden := make([]int, m.NumHiddenLayers)
+
+		for j := 0; j < m.NumHiddenLayers; j++ {
+			//hidden[j] = m.InputNodes - (interval * (j + 1))
+			hidden[j] = 32
+		}
+
+		if m.InputNodes == 0 {
+			m.InputNodes = len(train[0][0])
+		}
+		fmt.Println("size of input", len(train[0][0]))
+		nn0 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+		nn1 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+		nn2 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+		nn3 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+		nn4 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+		nn5 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+		nn6 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
+
+		fmt.Println("Training Default")
+		timer := time.Now()
+		nn0.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
+		fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
+		timer = time.Now()
+		fmt.Println("Training with Decreased Epochs")
+		timer = time.Now()
+		nn1.Train(train, m.NumEpochs/2, m.LearningRate, m.Momentum, true)
+		fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Increased Epochs")
+		timer = time.Now()
+		nn2.Train(train, m.NumEpochs*2, m.LearningRate, m.Momentum, true)
+		fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Decreased Learning Rate")
+		timer = time.Now()
+		nn3.Train(train, m.NumEpochs, m.LearningRate/2, m.Momentum, true)
+		fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Increased Learning Rate")
+		timer = time.Now()
+		nn4.Train(train, m.NumEpochs, m.LearningRate*2, m.Momentum, true)
+		fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Decreased Momentum")
+		timer = time.Now()
+		nn5.Train(train, m.NumEpochs, m.LearningRate, m.Momentum/2, true)
+		fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
+		fmt.Println("Training with Increased Momentum")
+		timer = time.Now()
+		nn6.Train(train, m.NumEpochs, m.LearningRate, m.Momentum*2, true)
+		fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
+
+		// Predict
+		totalcorrect0 := 0.0
+		totalcorrect1 := 0.0
+		totalcorrect2 := 0.0
+		totalcorrect3 := 0.0
+		totalcorrect4 := 0.0
+		totalcorrect5 := 0.0
+		totalcorrect6 := 0.0
+		for i := 0; i < len(test); i++ {
+			// fmt.Println("expected", MinMax(test[i][1]))
+			// fmt.Println("predicted", MinMax(nn.Predict(test[i][0])))
+			// s := fmt.Sprintf("%d, %d | ", MinMax(test[i][1]), MinMax(nn0.Predict(test[i][0])))
+			// fmt.Print(s)
+			// if i%15 == 0 {
+			//	 fmt.Println()
+			// }
+			if MinMax(test[i][1]) == MinMax(nn0.Predict(test[i][0])) {
+				totalcorrect0 += 1.0
+			}
+			if MinMax(test[i][1]) == MinMax(nn1.Predict(test[i][0])) {
+				totalcorrect1 += 1.0
+			}
+			if MinMax(test[i][1]) == MinMax(nn2.Predict(test[i][0])) {
+				totalcorrect2 += 1.0
+			}
+			if MinMax(test[i][1]) == MinMax(nn3.Predict(test[i][0])) {
+				totalcorrect3 += 1.0
+			}
+			if MinMax(test[i][1]) == MinMax(nn4.Predict(test[i][0])) {
+				totalcorrect4 += 1.0
+			}
+			if MinMax(test[i][1]) == MinMax(nn5.Predict(test[i][0])) {
+				totalcorrect5 += 1.0
+			}
+			if MinMax(test[i][1]) == MinMax(nn6.Predict(test[i][0])) {
+				totalcorrect6 += 1.0
+			}
+		}
+		output0 := fmt.Sprintf("Default Percent correct: %.2f %s\n", totalcorrect0/float64(len(test))*100.0, "%")
+		output1 := fmt.Sprintf("Decrease Epochs Percent correct: %.2f %s\n", totalcorrect1/float64(len(test))*100.0, "%")
+		output2 := fmt.Sprintf("Increase Epochs Percent correct: %.2f %s\n", totalcorrect2/float64(len(test))*100.0, "%")
+		output3 := fmt.Sprintf("Decrease Learning Rate Percent correct: %.2f %s\n", totalcorrect3/float64(len(test))*100.0, "%")
+		output4 := fmt.Sprintf("Increase Learning Rate Percent correct: %.2f %s\n", totalcorrect4/float64(len(test))*100.0, "%")
+		output5 := fmt.Sprintf("Decrease Momentum Percent correct: %.2f %s\n", totalcorrect5/float64(len(test))*100.0, "%")
+		output6 := fmt.Sprintf("Increase Momentum Percent correct: %.2f %s\n", totalcorrect6/float64(len(test))*100.0, "%")
+		fmt.Print(output0, output1, output2, output3, output4, output5, output6)
+	}
+	// // Save the model
+	// nn.Save("model.json")
+
+	// // Load the model
+	// nn2, err := gonet.Load("model.json")
+	// if err != nil {
+	// 	log.Fatal("Load model failed.")
+	// }
+	// fmt.Printf("%f XOR %f => %f\n", testInput[0], testInput[1], nn2.Predict(testInput)[0])
+	// 1.000000 XOR 0.000000 => 0.943074
+
+}
+func MinMax(array []float64) int {
+	index := 0
+	max := 0.0
+	for i, value := range array {
+		if max < value {
+			index = i
+			max = value
+		}
+	}
+	return index
 }
 
 func main() {
