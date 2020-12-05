@@ -10,7 +10,7 @@
    "NumHiddenLayers": 3,
    "OutputNodes": 10,
    "NumEpochs": 100,
-   "LearningRate": 0.01,
+   "LearningRate": 0.005,
    "Momentum": 0.0005,
    "Layers": 0,
    "Learning": "",
