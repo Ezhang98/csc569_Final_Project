@@ -1053,6 +1053,10 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 				return
 			}
 			if tasks[0] == "m" {
+<<<<<<< HEAD
+=======
+				
+>>>>>>> parent of 5db29a4... fixed output
 				if indivModel.NumHiddenLayers > 1{
 					runNN(indivModel, trainingdata, testdata)
 				}
