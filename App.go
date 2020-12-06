@@ -20,7 +20,6 @@ import (
 	_ "github.com/andlabs/ui/winmanifest"
 	"github.com/dathoangnd/gonet"
 
-	"math/rand"
 )
 
 type UIWindow struct {
@@ -865,19 +864,14 @@ func launchServers(numW int) {
 	go shadowMaster(mrData.toShadowMasters[1], hb1, hb2, mrData.numWorkers, mrData.numWorkers+2, mrData, killMaster)
 
 	for {
-		reply := <-endrun
-		if reply == "end"{
-			break
+		select {
+		case reply := <-endrun:
+			// fmt.Println("end main thread")
+			if reply == "end"{
+				break
+			}
 		}
 	}
-	// wait here until "q" is entered from the command line
-	// scanner := bufio.NewScanner(os.Stdin)
-	// for scanner.Scan() {
-	// 	text := scanner.Text()
-	// 	if text == "q" {
-	// 		break
-	// 	}
-	// }
 }
 
 // Master node
@@ -1171,7 +1165,7 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan str
 	}
 
 	for {
-		// fmt.Print("whb", k)
+		fmt.Print("whb", k)
 		time.Sleep(100 * time.Millisecond)
 		hbtable = updateTable(k, hbtable, counter, hb1, hb2)
 		counter++
@@ -1211,6 +1205,7 @@ func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses 
 		select {
 		case reply := <-kill:
 			if reply == "die" {
+				fmt.Println("master heartbeat ended")
 				return
 			}
 		default:
@@ -1265,425 +1260,11 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 				// cleanup
 				currentStep = "step end"
 				mrData.log = append(mrData.log, currentStep)
+				
 				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
-				currentStep = "step cleanup"
-				mrData.log = append(mrData.log, currentStep)
-
-			} else if currentStep == "step cleanup" {
-				// cleanup
-				currentStep = "step end"
-				mrData.log = append(mrData.log, currentStep)
-				killHB <- "kill"
+				// fmt.Println("shadow", selfID, "ending")
 				return
-			}
+			} 
 		case isDead := <-isMasterDead:
 			masterNotDead = isDead
 		default:
@@ -1717,6 +1298,7 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 	for {
 		select {
 		case reply := <-killHB:
+			// fmt.Println("shadow heartbeat", selfID, "ending")
 			return reply
 		default:
 		}
