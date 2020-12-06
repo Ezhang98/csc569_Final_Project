@@ -865,10 +865,10 @@ func launchServers(numW int) {
 		}
 	}
 
-	for i:=0 ; i < len(mrData.models); i ++{
-		printModelParam(mrData.models[i])
-	}
-	return
+	// for i:=0 ; i < len(mrData.models); i ++{
+	// 	printModelParam(mrData.models[i])
+	// }
+	// return
 
 	// example
 	// for i := 0; i < 4; i ++{
