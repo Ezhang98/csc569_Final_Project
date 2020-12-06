@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
 	"github.com/dathoangnd/gonet"
@@ -58,6 +59,8 @@ var mainwin *ui.Window
 var modelCount int = 0
 var models []ui.Control = make([]ui.Control, 5)
 var windowData UIWindow
+var results *ui.Grid
+var resList []*ui.Label = make([]*ui.Label, 35)
 
 func makeModelParam(m ModelConfig) ui.Control {
 	hbox := ui.NewHorizontalBox()
@@ -472,6 +475,10 @@ func makeToolbar2() ui.Control {
 	grid.SetPadded(true)
 	vbox.Append(grid, false)
 
+	results = ui.NewGrid()
+	results.SetPadded(true)
+	vbox.Append(results, false)
+
 	button := ui.NewButton("Import Config")
 	button.OnClicked(func(*ui.Button) {
 		filename := ui.OpenFile(mainwin)
@@ -480,9 +487,22 @@ func makeToolbar2() ui.Control {
 			temp := UIWindow{}
 			_ = json.Unmarshal([]byte(file), &temp)
 			windowData = temp
+			vbox.Delete(2)
 			vbox.Delete(1)
 			grid = generateFromState()
 			vbox.Append(grid, false)
+			results = ui.NewGrid()
+			results.SetPadded(true)
+			vbox.Append(results, false)
+			for i := 0; i < windowData.ModelCount; i++ {
+				for j := 0; j < 7; j++ {
+					s := fmt.Sprintf("Model %d Results - ", (i*7)+j)
+					resList[(i*7)+j] = ui.NewLabel(s)
+					results.Append(resList[(i*7)+j],
+						0, ((i+1)*7)+j, 1, 1,
+						false, ui.AlignFill, false, ui.AlignFill)
+				}
+			}
 		}
 	})
 	msggrid.Append(button,
@@ -499,6 +519,13 @@ func makeToolbar2() ui.Control {
 			grid.Append(model,
 				0, modelCount+2, 2, 1,
 				true, ui.AlignFill, false, ui.AlignFill)
+			for j := 0; j < 7; j++ {
+				s := fmt.Sprintf("Model %d Results - ", (windowData.ModelCount*7)+j)
+				resList[(windowData.ModelCount*7)+j] = ui.NewLabel(s)
+				results.Append(resList[(windowData.ModelCount*7)+j],
+					0, ((windowData.ModelCount+1)*7)+j, 1, 1,
+					false, ui.AlignFill, false, ui.AlignFill)
+			}
 			modelCount++
 			windowData.ModelCount++
 		}
@@ -523,9 +550,13 @@ func makeToolbar2() ui.Control {
 		windowData = temp
 		windowData.Models = make([]ModelConfig, 5)
 		windowData.ModelCount = 0
+		vbox.Delete(2)
 		vbox.Delete(1)
 		grid = generateFromState()
 		vbox.Append(grid, false)
+		results = ui.NewGrid()
+		results.SetPadded(true)
+		vbox.Append(results, false)
 	})
 	msggrid.Append(button,
 		3, 0, 1, 1,
@@ -533,7 +564,7 @@ func makeToolbar2() ui.Control {
 
 	button = ui.NewButton("Run Models")
 	button.OnClicked(func(*ui.Button) {
-		launchServers(7 * windowData.ModelCount)
+		go launchServers(7 * windowData.ModelCount)
 		// runNN()
 	})
 	msggrid.Append(button,
@@ -675,7 +706,8 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	// Enable debug mode to log learning error every 1000 iterations
 	timer := time.Now()
 	nn.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
-	fmt.Printf("Model %d: Runtime: %.5f seconds\n\n", m.ModelID, time.Since(timer).Seconds())
+	s := fmt.Sprintf("Model %d Results - ", m.ModelID)
+	runtime := fmt.Sprintf("Runtime: %.5f seconds, ", time.Since(timer).Seconds())
 
 	// Predict
 	totalcorrect := 0.0
@@ -689,8 +721,14 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 			totalcorrect += 1.0
 		}
 	}
-	
-	fmt.Printf("Model %d : Percent correct: %.2f percent\n", m.ModelID, totalcorrect/float64(len(test)) * 100.0)
+
+	acc := fmt.Sprintf("Accuracy: %.2f percent", totalcorrect/float64(len(test))*100.0)
+	s = s + runtime + acc
+
+	fmt.Println(s)
+	ui.QueueMain(func() {
+		resList[m.ModelID].SetText(s)
+	})
 
 	// for i := 0; i < modelCount; i++ {
 	// 	// m := windowData.Models[i]
@@ -854,8 +892,8 @@ func launchServers(numWorkers int) {
 	mrData.replies = make([]chan string, mrData.numWorkers)      // master <- worker : worker reply for task completion
 	mrData.corpses = make(chan []bool, mrData.numWorkers)        // master <- heartbeat : workers that have died
 	mrData.working = make([]string, mrData.numWorkers)           // which tasks assigned to which workers
-	mrData.training = make([]chan [][][]float64, mrData.numWorkers)      
-	mrData.test = make([]chan [][][]float64, mrData.numWorkers)      
+	mrData.training = make([]chan [][][]float64, mrData.numWorkers)
+	mrData.test = make([]chan [][][]float64, mrData.numWorkers)
 
 	var hb1 = make([]chan [][]int64, mrData.numWorkers+3) // heartbeat channels to neighbors for read
 	var hb2 = make([]chan [][]int64, mrData.numWorkers+3) // heartbeat channels to neighbors for write
@@ -887,15 +925,15 @@ func launchServers(numWorkers int) {
 		mrData.toShadowMasters[j] = make(chan string, 10)
 	}
 
-	for i := 0; i < windowData.ModelCount; i++{
-		if windowData.Models[i].Name != ""{
+	for i := 0; i < windowData.ModelCount; i++ {
+		if windowData.Models[i].Name != "" {
 			mrData.models = append(mrData.models, windowData.Models[i])
 
 			doubleEpoch := windowData.Models[i]
 			doubleEpoch.NumEpochs *= 2
 			doubleEpoch.ModelID = 1
 			mrData.models = append(mrData.models, doubleEpoch)
-			
+
 			halfEpoch := windowData.Models[i]
 			halfEpoch.NumEpochs /= 2
 			halfEpoch.ModelID = 2
@@ -915,7 +953,7 @@ func launchServers(numWorkers int) {
 			doubleMomentum.Momentum *= 2
 			doubleMomentum.ModelID = 5
 			mrData.models = append(mrData.models, doubleMomentum)
-			
+
 			halfMomentum := windowData.Models[i]
 			halfMomentum.Momentum /= 2
 			halfMomentum.ModelID = 6
@@ -923,20 +961,16 @@ func launchServers(numWorkers int) {
 		}
 	}
 
-
-
-
 	// example
 	// for i := 0; i < 4; i ++{
 	// 	var newModel ModelConfig
 	// 	mrData.models[i] = newModel
 	// 	mrData.models[i].ModelID = i
-	// 	mrData.models[i].numHiddenLayers = rand.Intn(5) 
+	// 	mrData.models[i].numHiddenLayers = rand.Intn(5)
 	// 	mrData.models[i].numEpochs = rand.Intn(20)
 	// 	mrData.models[i].learningRate = rand.Float64()
 	// 	mrData.models[i].momentum = rand.Float64()
 	// }
-
 
 	// start nodes
 	masterlog := make([]string, 0)
@@ -947,11 +981,10 @@ func launchServers(numWorkers int) {
 
 	go shadowMaster(mrData.toShadowMasters[1], hb1, hb2, mrData.numWorkers, mrData.numWorkers+2, mrData, killMaster)
 
-
-	for{
+	for {
 		reply := <-endrun
 		fmt.Println(reply)
-		if reply == "end"{
+		if reply == "end" {
 			break
 		}
 	}
@@ -973,14 +1006,14 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 	mrData.log = log
 	killHB := make(chan string, numWorkers)
 	message := ""
-	
+
 	// Master Recovery: resume step after Master failure
 	for i := 0; i < len(log); i++ {
-		if len(log[i]) >=4 && log[i][0:4] == "step" {
+		if len(log[i]) >= 4 && log[i][0:4] == "step" {
 			currentStep = log[i]
 		}
 	}
-	
+
 	// Run master heartbeat
 	// go masterHeartbeat(hb1, hb2, mrData.numWorkers, mrData.corpses, killHB, killMaster, mrData)
 
@@ -1016,7 +1049,7 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 			trainingdata := parseCSV(windowData.TrainData)
 			testdata := parseCSV(windowData.TestData)
 			// fmt.Println("starting getting data")
-			for k:= 0 ; k < mrData.numWorkers; k++ {
+			for k := 0; k < mrData.numWorkers; k++ {
 				// fmt.Println("sending to worker", k)
 				mrData.training[k] <- trainingdata
 				mrData.test[k] <- testdata
@@ -1051,7 +1084,7 @@ func distributeTasks(mrData MasterData) MasterData {
 	loop := true
 
 	fmt.Println("Distributing Tasks Started...")
-	mrData.finished = make([]string, len(mrData.models))         // which models have completed
+	mrData.finished = make([]string, len(mrData.models)) // which models have completed
 	for j := 0; j < len(mrData.models); j++ {
 		mrData.finished[j] = "not started"
 	}
@@ -1125,7 +1158,7 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 	var indivModel ModelConfig
 	for {
 		// read task from channel
-		trainingdata =  <-train
+		trainingdata = <-train
 		testdata = <-test
 		task = <-commands
 		// fmt.Println(task)
@@ -1133,7 +1166,7 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 		indivModel = <-frommaster
 		tasks := strings.Split(task, "_")
 		if tasks[0] == "end" {
-			
+
 			fmt.Println("ending worker", k)
 			//endHB <- "end"
 			return
@@ -1142,7 +1175,7 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 			// fmt.Print("started task")
 			runNN(indivModel, trainingdata, testdata)
 		}
-		reply <- strconv.Itoa(k) + "_" +strconv.Itoa(indivModel.ModelID)
+		reply <- strconv.Itoa(k) + "_" + strconv.Itoa(indivModel.ModelID)
 	}
 }
 
@@ -1158,7 +1191,6 @@ func cleanup(mrData MasterData) MasterData {
 	return mrData
 }
 
-
 // Helper function to find max
 func max(x, y int64) int64 {
 	if x > y {
@@ -1167,9 +1199,9 @@ func max(x, y int64) int64 {
 	return y
 }
 
-func printModelParam(model ModelConfig){
+func printModelParam(model ModelConfig) {
 	fmt.Println("ID", model.ModelID, ", epochs", model.NumEpochs, ", learning rate", model.LearningRate,
-				", momentum", model.Momentum, ", hidden layers", model.NumHiddenLayers)
+		", momentum", model.Momentum, ", hidden layers", model.NumHiddenLayers)
 }
 
 // Update heartbeat tables for Master, 2 ShadowMasters and 8 workers
@@ -1335,7 +1367,7 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 				currentStep = "step load"
 				mrData.log = append(mrData.log, currentStep)
 
-			}else if currentStep == "step working" {
+			} else if currentStep == "step working" {
 				// master working
 				currentStep = "step cleanup"
 				mrData.log = append(mrData.log, currentStep)
@@ -1386,7 +1418,7 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 		time.Sleep(100 * time.Millisecond)
 		currentTable = updateTable(selfID, previousTable, counter, hb1, hb2)
 
-		if currentTable[selfID][1]-previousTable[masterID][1] > 2{
+		if currentTable[selfID][1]-previousTable[masterID][1] > 2 {
 			if selfID == masterID+1 {
 				fmt.Println("\n----- The Running Master has died -----\n")
 				isMasterAlive <- false
@@ -1398,4 +1430,3 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 	}
 
 }
-
