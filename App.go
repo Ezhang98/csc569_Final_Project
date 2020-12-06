@@ -1198,7 +1198,7 @@ func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses 
 		time.Sleep(100 * time.Millisecond)
 		currentTable = updateTable(k, previousTable, counter, hb1, hb2)
 		for i := 0; i < numWorkers+3; i++ {
-			if currentTable[k][1]-previousTable[i][1] > 2 {
+			if currentTable[k][1]-previousTable[i][1] > 15 {
 				fmt.Println(currentTable[k][1], previousTable[i][1])
 				if i == numWorkers+1 || i == numWorkers+2 {
 					fmt.Println("Shadow master died")
@@ -1286,7 +1286,7 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 		time.Sleep(100 * time.Millisecond)
 		currentTable = updateTable(selfID, previousTable, counter, hb1, hb2)
 
-		if currentTable[selfID][1]-previousTable[masterID][1] > 2 {
+		if currentTable[selfID][1]-previousTable[masterID][1] > 15 {
 			if selfID == masterID+1 {
 				fmt.Println("\n----- The Running Master has died -----\n")
 				isMasterAlive <- false
