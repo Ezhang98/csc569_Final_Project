@@ -1034,7 +1034,7 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 	var indivModel ModelConfig
 	trainingdata = <-train
 	testdata = <-test
-	fmt.Print("block?", k)
+	fmt.Print("block", k)
 	indivModel = <-frommaster
 	
 	for {
