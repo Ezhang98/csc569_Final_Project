@@ -499,7 +499,7 @@ func makeToolbar2() ui.Control {
 					s := fmt.Sprintf("%s Results - ", generateLabel((i*7)+j))
 					resList[(i*7)+j] = ui.NewLabel(s)
 					results.Append(resList[(i*7)+j],
-						0, ((i+1)*7)+j, 1, 2,
+						0, ((i+1)*7)+j, 1, 1,
 						false, ui.AlignFill, false, ui.AlignFill)
 				}
 			}
@@ -523,7 +523,7 @@ func makeToolbar2() ui.Control {
 				s := fmt.Sprintf("%s Results - ", generateLabel((windowData.ModelCount*7)+j))
 				resList[(windowData.ModelCount*7)+j] = ui.NewLabel(s)
 				results.Append(resList[(windowData.ModelCount*7)+j],
-					0, ((windowData.ModelCount+1)*7)+j, 1, 2,
+					0, ((windowData.ModelCount+1)*7)+j, 1, 1,
 					false, ui.AlignFill, false, ui.AlignFill)
 			}
 			modelCount++
@@ -654,23 +654,18 @@ func parseCSV(path string) [][][]float64 {
 			expected := make([]float64, 10)
 			for i := 0; i < len(record); i++ {
 				if s, err := strconv.ParseFloat(record[i], 64); err == nil {
-					// fmt.Println(s)
 					if i == 0 {
 						expected[int(s)] = 1
 					} else {
 						floatarr[i-1] = s
 					}
-
 				}
 			}
 			if len(floatarr) == 0 {
 				break
 			}
 			oneEntry := [][]float64{floatarr, expected}
-
 			data = append(data, oneEntry)
-			// fmt.Println(one_entry)
-
 		}
 		if err == io.EOF {
 			break
@@ -680,12 +675,8 @@ func parseCSV(path string) [][][]float64 {
 		}
 		index++
 	}
-	// fmt.Println(data)
 	return data
 }
-
-// index 0 [[28x28], expected_value]
-// index 1
 
 func generateLabel(id int) string {
 	num1 := (id / 7) + 1
@@ -709,6 +700,7 @@ func generateLabel(id int) string {
 	return s
 }
 
+// Runs a basic neural network
 func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	hidden := make([]int, m.NumHiddenLayers)
 	for j := 0; j < m.NumHiddenLayers; j++ {
@@ -716,10 +708,7 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	}
 	nn := gonet.New(len(train[0][0]), hidden, 10, true)
 
-	// Train the network
-	// Run for 3000 epochs
-	// The learning rate is 0.4 and the momentum factor is 0.2
-	// Enable debug mode to log learning error every 1000 iterations
+	// Train the network, use epochs, learning rate, and momentum factor from UI
 	timer := time.Now()
 	nn.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
 	s := fmt.Sprintf("%s Results - ", generateLabel(m.ModelID))
@@ -743,6 +732,7 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 
 }
 
+// Finds the index of max value in an array
 func MinMax(array []float64) int {
 	index := 0
 	max := 0.0
@@ -760,10 +750,11 @@ func main() {
 }
 
 // ------------------------------ PAXOS ------------------------------------
+
 // number of workers
 var numWorkers int
 
-//struct to organize data into the master function
+// struct to organize data into the master function
 type MasterData struct {
 	id              int
 	numWorkers      int
@@ -821,7 +812,7 @@ func launchServers(numW int) {
 
 	// initialize shadowMasters
 	numShadowMasters := 2
-	// shadowMaster <- master : replication
+	// channel shadowMaster <- master : replication
 	mrData.toShadowMasters = make([]chan string, numShadowMasters)
 	for j := 0; j < numShadowMasters; j++ {
 		mrData.toShadowMasters[j] = make(chan string, 10)
@@ -865,22 +856,6 @@ func launchServers(numW int) {
 		}
 	}
 
-	// for i:=0 ; i < len(mrData.models); i ++{
-	// 	printModelParam(mrData.models[i])
-	// }
-	// return
-
-	// example
-	// for i := 0; i < 4; i ++{
-	// 	var newModel ModelConfig
-	// 	mrData.models[i] = newModel
-	// 	mrData.models[i].ModelID = i
-	// 	mrData.models[i].numHiddenLayers = rand.Intn(5)
-	// 	mrData.models[i].numEpochs = rand.Intn(20)
-	// 	mrData.models[i].learningRate = rand.Float64()
-	// 	mrData.models[i].momentum = rand.Float64()
-	// }
-
 	// start nodes
 	masterlog := make([]string, 0)
 	var endrun = make(chan string)
@@ -893,7 +868,6 @@ func launchServers(numW int) {
 	for {
 		select {
 		case reply := <-endrun:
-			// fmt.Println("end main thread")
 			if reply == "end" {
 				break
 			}
@@ -920,7 +894,6 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 	go masterHeartbeat(hb1, hb2, mrData.numWorkers, mrData.corpses, killHB, killMaster, mrData)
 
 	for {
-		// fmt.Println("Master running: ", currentStep) // print in UI
 		if currentStep == "step start" {
 			// If master died partway through launching workers, find the last logged k and start from there
 			k := 0
@@ -930,10 +903,8 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 					k, _ = strconv.Atoi(last[2])
 				}
 			}
-			// fmt.Println(mrData.numWorkers)
 			for ; k < mrData.numWorkers; k++ {
 				go worker(mrData.training[k], mrData.test[k], mrData.request[k], mrData.commands[k], mrData.replies[k], hb1, hb2, k)
-				// fmt.Printf("launch worker %d\n", k)
 				message = fmt.Sprintf("launch worker %s", k)
 				mrData.log = append(mrData.log, currentStep) //appends launch worker step to log
 				mrData.toShadowMasters[0] <- message         //sends launch worker message to first Shadow Master channel
@@ -946,17 +917,14 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 
 		} else if currentStep == "step working" {
 			// manage the distributeTasks step
-			// trainingdata := parseCSV(windowData.TrainData)
-			// testdata := parseCSV(windowData.TestData)
-			trainingdata := parseCSV("datasets/mnist_train_short.csv")
-			testdata := parseCSV("datasets/mnist_train_short.csv")
-			// fmt.Println("starting getting data")
+			trainingdata := parseCSV(windowData.TrainData)
+			testdata := parseCSV(windowData.TestData)
+			// trainingdata := parseCSV("datasets/mnist_train_short.csv")
+			// testdata := parseCSV("datasets/mnist_train_short.csv")
 			for k := 0; k < mrData.numWorkers; k++ {
-				// fmt.Println("sending to worker", k)
 				mrData.training[k] <- trainingdata
 				mrData.test[k] <- testdata
 			}
-			// fmt.Println("finished loading data")
 			mrData = distributeTasks(mrData)
 			currentStep = "step cleanup"
 			mrData.log = append(mrData.log, currentStep) //appends master distributeTasks step to log
@@ -965,8 +933,6 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 
 		} else if currentStep == "step cleanup" {
 			// cleanup workers who should now be done with all tasks
-			// mrData = cleanup(mrData)
-
 			currentStep = "step end"
 			mrData.log = append(mrData.log, currentStep) //appends end message to log
 			mrData.toShadowMasters[0] <- currentStep     //sends end message to first Shadow Master channel
@@ -1031,7 +997,6 @@ func distributeTasks(mrData MasterData) MasterData {
 			default:
 			}
 		}
-		// fmt.Println(mrData.working)
 		// checks that all models have completed
 		if count >= len(mrData.models) {
 			check := true
@@ -1053,7 +1018,6 @@ func distributeTasks(mrData MasterData) MasterData {
 func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan ModelConfig, commands chan string, reply chan string, hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
 	killHB := make(chan string, 1)
 	go heartbeat(hb1, hb2, k, killHB)
-	// task := ""
 	var trainingdata [][][]float64
 	var testdata [][][]float64
 	var indivModel ModelConfig
@@ -1067,10 +1031,8 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 		case testdata = <-test:
 			continue
 		case task := <-commands:
-			// fmt.Println(task)
 			tasks := strings.Split(task, "_")
 			if tasks[0] == "end" {
-				// fmt.Println("ending worker", k)
 				killHB <- "end"
 				return
 			}
@@ -1112,7 +1074,7 @@ func printModelParam(model ModelConfig) {
 		", momentum", model.Momentum, ", hidden layers", model.NumHiddenLayers)
 }
 
-// Update heartbeat tables for Master, 2 ShadowMasters and 8 workers
+// Update heartbeat tables for Master, 2 ShadowMasters and 7 workers
 func updateTable(index int, hbtable [][]int64, counter int, hb1 []chan [][]int64, hb2 []chan [][]int64) [][]int64 {
 	next := index + 1
 	prev := index - 1
@@ -1168,7 +1130,6 @@ func updateTable(index int, hbtable [][]int64, counter int, hb1 []chan [][]int64
 		}
 	}
 	now := time.Now().Unix() // current local time
-	// fmt.Println(index, " temp ", temp, "hbtable ", hbtable)
 	temp[index][0] = hbtable[index][0] + 1
 	temp[index][1] = now
 	// send table
@@ -1182,7 +1143,6 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan str
 	now := time.Now().Unix() // current local time
 	counter := 0
 	hbtable := make([][]int64, numWorkers+3)
-	// fmt.Println(numWorkers)
 	// initialize hbtable
 	for i := 0; i < numWorkers+3; i++ {
 		hbtable[i] = make([]int64, 2)
@@ -1191,7 +1151,6 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan str
 	}
 
 	for {
-		// fmt.Print("whb", k)
 		time.Sleep(100 * time.Millisecond)
 		hbtable = updateTable(k, hbtable, counter, hb1, hb2)
 		counter++
@@ -1268,7 +1227,6 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 	for masterNotDead {
 		select {
 		case copy := <-copier:
-			// fmt.Println("shadow", selfID, copy)
 			logs = append(logs, copy)
 			// check if to die
 			currentStep := copy
@@ -1286,9 +1244,7 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 				// cleanup
 				currentStep = "step end"
 				mrData.log = append(mrData.log, currentStep)
-
 				killHB <- "kill"
-				// fmt.Println("shadow", selfID, "ending")
 				return
 			}
 		case isDead := <-isMasterDead:
@@ -1324,7 +1280,6 @@ func shadowHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, i
 	for {
 		select {
 		case reply := <-killHB:
-			// fmt.Println("shadow heartbeat", selfID, "ending")
 			return reply
 		default:
 		}
