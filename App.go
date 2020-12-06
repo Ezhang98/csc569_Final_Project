@@ -18,6 +18,8 @@ import (
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
 	"github.com/dathoangnd/gonet"
+
+	"math/rand"
 )
 
 type UIWindow struct {
@@ -533,7 +535,7 @@ func makeToolbar2() ui.Control {
 
 	button = ui.NewButton("Run Models")
 	button.OnClicked(func(*ui.Button) {
-		launchServers(7 * windowData.ModelCount)
+		go launchServers(7 * windowData.ModelCount)
 		// runNN()
 	})
 	msggrid.Append(button,
@@ -657,16 +659,10 @@ func parseCSV(path string) [][][]float64 {
 // index 1
 
 func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
-	// train := parseCSV(windowData.TrainData)
-	// test := parseCSV(windowData.TestData)
 	hidden := make([]int, m.NumHiddenLayers)
 	for j := 0; j < m.NumHiddenLayers; j++ {
-		//hidden[j] = m.InputNodes - (interval * (j + 1))
 		hidden[j] = 32
 	}
-	printModelParam(m)
-	// fmt.Println(hidden)
-	// fmt.Println("running network", model.ModelID)
 	nn := gonet.New(len(train[0][0]), hidden, 10, true)
 
 	// Train the network
@@ -675,133 +671,17 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	// Enable debug mode to log learning error every 1000 iterations
 	timer := time.Now()
 	nn.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
-	fmt.Printf("Model %d: Runtime: %.5f seconds\n\n", m.ModelID, time.Since(timer).Seconds())
+	fmt.Printf("Model %d: Runtime: %.5f seconds\n", m.ModelID, time.Since(timer).Seconds())
 
 	// Predict
 	totalcorrect := 0.0
 	for i := 0; i < len(test); i++ {
-		// fmt.Print(MinMax(test[i][1]), " ", MinMax(nn.Predict(test[i][0])), " | ")
-		// if i%15 == 0{
-		// 	fmt.Println()
-		// }
-
 		if MinMax(test[i][1]) == MinMax(nn.Predict(test[i][0])) {
 			totalcorrect += 1.0
 		}
 	}
-	
+	printModelParam(m)
 	fmt.Printf("Model %d : Percent correct: %.2f percent\n", m.ModelID, totalcorrect/float64(len(test)) * 100.0)
-
-	// for i := 0; i < modelCount; i++ {
-	// 	// m := windowData.Models[i]
-	// 	//interval := (m.InputNodes - m.OutputNodes) / (m.NumHiddenLayers + 1)
-	// 	hidden := make([]int, m.NumHiddenLayers)
-
-	// 	for j := 0; j < m.NumHiddenLayers; j++ {
-	// 		//hidden[j] = m.InputNodes - (interval * (j + 1))
-	// 		hidden[j] = 32
-	// 	}
-
-	// 	if m.InputNodes == 0 {
-	// 		m.InputNodes = len(train[0][0])
-	// 	}
-	// 	fmt.Println("size of input", len(train[0][0]))
-	// 	nn0 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
-	// 	nn1 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
-	// 	nn2 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
-	// 	nn3 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
-	// 	nn4 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
-	// 	nn5 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
-	// 	nn6 := gonet.New(m.InputNodes, hidden, m.OutputNodes, true)
-
-	// 	fmt.Println("Training Default")
-	// 	timer := time.Now()
-	// 	nn0.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
-	// 	fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
-	// 	timer = time.Now()
-	// 	fmt.Println("Training with Decreased Epochs")
-	// 	timer = time.Now()
-	// 	nn1.Train(train, m.NumEpochs/2, m.LearningRate, m.Momentum, true)
-	// 	fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
-	// 	fmt.Println("Training with Increased Epochs")
-	// 	timer = time.Now()
-	// 	nn2.Train(train, m.NumEpochs*2, m.LearningRate, m.Momentum, true)
-	// 	fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
-	// 	fmt.Println("Training with Decreased Learning Rate")
-	// 	timer = time.Now()
-	// 	nn3.Train(train, m.NumEpochs, m.LearningRate/2, m.Momentum, true)
-	// 	fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
-	// 	fmt.Println("Training with Increased Learning Rate")
-	// 	timer = time.Now()
-	// 	nn4.Train(train, m.NumEpochs, m.LearningRate*2, m.Momentum, true)
-	// 	fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
-	// 	fmt.Println("Training with Decreased Momentum")
-	// 	timer = time.Now()
-	// 	nn5.Train(train, m.NumEpochs, m.LearningRate, m.Momentum/2, true)
-	// 	fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
-	// 	fmt.Println("Training with Increased Momentum")
-	// 	timer = time.Now()
-	// 	nn6.Train(train, m.NumEpochs, m.LearningRate, m.Momentum*2, true)
-	// 	fmt.Printf("Runtime: %.5f seconds\n\n", time.Since(timer).Seconds())
-
-	// 	// Predict
-	// 	totalcorrect0 := 0.0
-	// 	totalcorrect1 := 0.0
-	// 	totalcorrect2 := 0.0
-	// 	totalcorrect3 := 0.0
-	// 	totalcorrect4 := 0.0
-	// 	totalcorrect5 := 0.0
-	// 	totalcorrect6 := 0.0
-	// 	for i := 0; i < len(test); i++ {
-	// 		// fmt.Println("expected", MinMax(test[i][1]))
-	// 		// fmt.Println("predicted", MinMax(nn.Predict(test[i][0])))
-	// 		// s := fmt.Sprintf("%d, %d | ", MinMax(test[i][1]), MinMax(nn0.Predict(test[i][0])))
-	// 		// fmt.Print(s)
-	// 		// if i%15 == 0 {
-	// 		//	 fmt.Println()
-	// 		// }
-	// 		if MinMax(test[i][1]) == MinMax(nn0.Predict(test[i][0])) {
-	// 			totalcorrect0 += 1.0
-	// 		}
-	// 		if MinMax(test[i][1]) == MinMax(nn1.Predict(test[i][0])) {
-	// 			totalcorrect1 += 1.0
-	// 		}
-	// 		if MinMax(test[i][1]) == MinMax(nn2.Predict(test[i][0])) {
-	// 			totalcorrect2 += 1.0
-	// 		}
-	// 		if MinMax(test[i][1]) == MinMax(nn3.Predict(test[i][0])) {
-	// 			totalcorrect3 += 1.0
-	// 		}
-	// 		if MinMax(test[i][1]) == MinMax(nn4.Predict(test[i][0])) {
-	// 			totalcorrect4 += 1.0
-	// 		}
-	// 		if MinMax(test[i][1]) == MinMax(nn5.Predict(test[i][0])) {
-	// 			totalcorrect5 += 1.0
-	// 		}
-	// 		if MinMax(test[i][1]) == MinMax(nn6.Predict(test[i][0])) {
-	// 			totalcorrect6 += 1.0
-	// 		}
-	// 	}
-	// 	output0 := fmt.Sprintf("Default Percent correct: %.2f %s\n", totalcorrect0/float64(len(test))*100.0, "%")
-	// 	output1 := fmt.Sprintf("Decrease Epochs Percent correct: %.2f %s\n", totalcorrect1/float64(len(test))*100.0, "%")
-	// 	output2 := fmt.Sprintf("Increase Epochs Percent correct: %.2f %s\n", totalcorrect2/float64(len(test))*100.0, "%")
-	// 	output3 := fmt.Sprintf("Decrease Learning Rate Percent correct: %.2f %s\n", totalcorrect3/float64(len(test))*100.0, "%")
-	// 	output4 := fmt.Sprintf("Increase Learning Rate Percent correct: %.2f %s\n", totalcorrect4/float64(len(test))*100.0, "%")
-	// 	output5 := fmt.Sprintf("Decrease Momentum Percent correct: %.2f %s\n", totalcorrect5/float64(len(test))*100.0, "%")
-	// 	output6 := fmt.Sprintf("Increase Momentum Percent correct: %.2f %s\n", totalcorrect6/float64(len(test))*100.0, "%")
-	// 	fmt.Print(output0, output1, output2, output3, output4, output5, output6)
-	// }
-	// // Save the model
-	// nn.Save("model.json")
-
-	// // Load the model
-	// nn2, err := gonet.Load("model.json")
-	// if err != nil {
-	// 	log.Fatal("Load model failed.")
-	// }
-	// fmt.Printf("%f XOR %f => %f\n", testInput[0], testInput[1], nn2.Predict(testInput)[0])
-	// 1.000000 XOR 0.000000 => 0.943074
-
 }
 
 func MinMax(array []float64) int {
@@ -817,7 +697,8 @@ func MinMax(array []float64) int {
 }
 
 func main() {
-	ui.Main(setupUI)
+	// ui.Main(setupUI)
+	launchServers(4)
 }
 
 // ------------------------------ PAXOS ------------------------------------
@@ -845,7 +726,8 @@ type MasterData struct {
 }
 
 // Launches nodes and creates MasterData structure
-func launchServers(numWorkers int) {
+func launchServers(numW int) {
+	numWorkers = numW
 
 	var mrData MasterData
 	mrData.numWorkers = numWorkers
@@ -887,55 +769,52 @@ func launchServers(numWorkers int) {
 		mrData.toShadowMasters[j] = make(chan string, 10)
 	}
 
-	for i := 0; i < windowData.ModelCount; i++{
-		if windowData.Models[i].Name != ""{
-			mrData.models = append(mrData.models, windowData.Models[i])
+	// for i := 0; i < windowData.ModelCount; i++{
+	// 	if windowData.Models[i].Name != ""{
+	// 		mrData.models = append(mrData.models, windowData.Models[i])
 
-			doubleEpoch := windowData.Models[i]
-			doubleEpoch.NumEpochs *= 2
-			doubleEpoch.ModelID = 1
-			mrData.models = append(mrData.models, doubleEpoch)
+	// 		doubleEpoch := windowData.Models[i]
+	// 		doubleEpoch.NumEpochs *= 2
+	// 		doubleEpoch.ModelID = 1
+	// 		mrData.models = append(mrData.models, doubleEpoch)
 			
-			halfEpoch := windowData.Models[i]
-			halfEpoch.NumEpochs /= 2
-			halfEpoch.ModelID = 2
-			mrData.models = append(mrData.models, halfEpoch)
+	// 		halfEpoch := windowData.Models[i]
+	// 		halfEpoch.NumEpochs /= 2
+	// 		halfEpoch.ModelID = 2
+	// 		mrData.models = append(mrData.models, halfEpoch)
 
-			doubleLearningRate := windowData.Models[i]
-			doubleLearningRate.LearningRate *= 2
-			doubleLearningRate.ModelID = 3
-			mrData.models = append(mrData.models, doubleLearningRate)
+	// 		doubleLearningRate := windowData.Models[i]
+	// 		doubleLearningRate.LearningRate *= 2
+	// 		doubleLearningRate.ModelID = 3
+	// 		mrData.models = append(mrData.models, doubleLearningRate)
 
-			halfLearningRate := windowData.Models[i]
-			halfLearningRate.LearningRate /= 2
-			halfLearningRate.ModelID = 4
-			mrData.models = append(mrData.models, halfLearningRate)
+	// 		halfLearningRate := windowData.Models[i]
+	// 		halfLearningRate.LearningRate /= 2
+	// 		halfLearningRate.ModelID = 4
+	// 		mrData.models = append(mrData.models, halfLearningRate)
 
-			doubleMomentum := windowData.Models[i]
-			doubleMomentum.Momentum *= 2
-			doubleMomentum.ModelID = 5
-			mrData.models = append(mrData.models, doubleMomentum)
+	// 		doubleMomentum := windowData.Models[i]
+	// 		doubleMomentum.Momentum *= 2
+	// 		doubleMomentum.ModelID = 5
+	// 		mrData.models = append(mrData.models, doubleMomentum)
 			
-			halfMomentum := windowData.Models[i]
-			halfMomentum.Momentum /= 2
-			halfMomentum.ModelID = 6
-			mrData.models = append(mrData.models, halfMomentum)
-		}
-	}
-
-
-
-
-	// example
-	// for i := 0; i < 4; i ++{
-	// 	var newModel ModelConfig
-	// 	mrData.models[i] = newModel
-	// 	mrData.models[i].ModelID = i
-	// 	mrData.models[i].numHiddenLayers = rand.Intn(5) 
-	// 	mrData.models[i].numEpochs = rand.Intn(20)
-	// 	mrData.models[i].learningRate = rand.Float64()
-	// 	mrData.models[i].momentum = rand.Float64()
+	// 		halfMomentum := windowData.Models[i]
+	// 		halfMomentum.Momentum /= 2
+	// 		halfMomentum.ModelID = 6
+	// 		mrData.models = append(mrData.models, halfMomentum)
+	// 	}
 	// }
+
+	mrData.models = make([]ModelConfig, 4)
+	for i := 0; i < 4; i ++{
+		var newModel ModelConfig
+		mrData.models[i] = newModel
+		mrData.models[i].ModelID = i
+		mrData.models[i].NumHiddenLayers = rand.Intn(30)  + 1
+		mrData.models[i].NumEpochs = rand.Intn(40)
+		mrData.models[i].LearningRate = rand.Float64()
+		mrData.models[i].Momentum = rand.Float64()
+	}
 
 
 	// start nodes
@@ -950,7 +829,7 @@ func launchServers(numWorkers int) {
 
 	for{
 		reply := <-endrun
-		fmt.Println(reply)
+		fmt.Println("main thread still running")
 		if reply == "end"{
 			break
 		}
@@ -967,7 +846,6 @@ func launchServers(numWorkers int) {
 
 // Master node
 func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log []string, killMaster chan string, end chan string) {
-	// fmt.Println("i am here")
 	// initialize variables
 	currentStep := "step start"
 	mrData.log = log
@@ -982,7 +860,7 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 	}
 	
 	// Run master heartbeat
-	// go masterHeartbeat(hb1, hb2, mrData.numWorkers, mrData.corpses, killHB, killMaster, mrData)
+	go masterHeartbeat(hb1, hb2, mrData.numWorkers, mrData.corpses, killHB, killMaster, mrData)
 
 	for {
 		// fmt.Println("Master running: ", currentStep) // print in UI
@@ -1011,10 +889,10 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 
 		} else if currentStep == "step working" {
 			// manage the distributeTasks step
-			// trainpath := "datasets/mnist_test.csv"
-			// testpath := "datasets/mnist_train_short.csv"
-			trainingdata := parseCSV(windowData.TrainData)
-			testdata := parseCSV(windowData.TestData)
+			// trainingdata := parseCSV(windowData.TrainData)
+			// testdata := parseCSV(windowData.TestData)
+			trainingdata := parseCSV("datasets/mnist_train_short.csv")
+			testdata := parseCSV("datasets/mnist_train_short.csv")
 			// fmt.Println("starting getting data")
 			for k:= 0 ; k < mrData.numWorkers; k++ {
 				// fmt.Println("sending to worker", k)
@@ -1031,16 +909,19 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 		} else if currentStep == "step cleanup" {
 			// cleanup workers who should now be done with all tasks
 			// mrData = cleanup(mrData)
-			for i := 0; i < mrData.numWorkers; i++ {
-				mrData.commands[i] <- "end"
-			}
+			
 			currentStep = "step end"
 			mrData.log = append(mrData.log, currentStep) //appends end message to log
 			mrData.toShadowMasters[0] <- currentStep     //sends end message to first Shadow Master channel
 			mrData.toShadowMasters[1] <- currentStep     //sends end message to second Shadow Master channel
-			fmt.Println("Running master is done.")
-			end <- "end"
+			
+			
 			killHB <- "die"
+			for i := 0; i < mrData.numWorkers; i++ {
+				mrData.commands[i] <- "end"
+			}
+			end <- "end"
+			fmt.Println("Running master is done.")
 			break
 		}
 	}
@@ -1062,13 +943,11 @@ func distributeTasks(mrData MasterData) MasterData {
 				for j := 0; j < len(mrData.models); j++ {
 					if mrData.finished[j] == "not started" {
 						mrData.finished[j] = "started"
-						mrData.commands[i] <- "m"
 						mrData.request[i] <- (mrData.models[j])
+						mrData.commands[i] <- "m"
 						mrData.working[i] = strconv.Itoa(j)
-
 						break
 					}
-
 				}
 			}
 			// checks for replies and dead workers
@@ -1077,8 +956,7 @@ func distributeTasks(mrData MasterData) MasterData {
 				replied := strings.Split(message, "_")
 				workerID, _ := strconv.Atoi(replied[1])
 				mrData.working[workerID] = ""
-				modelID, _ := strconv.Atoi(replied[0])
-				mrData.finished[modelID] = "finished"
+				mrData.finished[workerID] = "finished"
 				count++
 			case coffins := <-mrData.corpses:
 				for j := 0; j < mrData.numWorkers; j++ {
@@ -1097,7 +975,7 @@ func distributeTasks(mrData MasterData) MasterData {
 			default:
 			}
 		}
-
+		// fmt.Println(mrData.working)
 		// checks that all models have completed
 		if count >= len(mrData.models) {
 			check := true
@@ -1117,33 +995,44 @@ func distributeTasks(mrData MasterData) MasterData {
 }
 
 func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan ModelConfig, commands chan string, reply chan string, hb1 []chan [][]int64, hb2 []chan [][]int64, k int) {
-	//var endHB = make(chan string)
-	// go heartbeat(hb1, hb2, k, endHB)
-	task := ""
+	killHB := make(chan string, 1)
+	go heartbeat(hb1, hb2, k, killHB)
+	// task := ""
 	var trainingdata [][][]float64
 	var testdata [][][]float64
 	var indivModel ModelConfig
+	trainingdata = <-train
+	testdata = <-test
+	indivModel = <-frommaster
 	for {
-		// read task from channel
-		trainingdata =  <-train
-		testdata = <-test
-		task = <-commands
-		// fmt.Println(task)
-		// fmt.Println("received command")
-		indivModel = <-frommaster
-		tasks := strings.Split(task, "_")
-		if tasks[0] == "end" {
-			
-			fmt.Println("ending worker", k)
-			//endHB <- "end"
-			return
+		// trainingdata = <-train
+		// testdata = <-test
+		// indivModel = <-frommaster
+		// fmt.Print(k, "not blocked")
+		select {
+		case trainingdata = <-train:
+			continue
+		case testdata = <-test:
+			continue
+		case task := <-commands:
+			// fmt.Println(task)
+			tasks := strings.Split(task, "_")
+			if tasks[0] == "end" {
+				// fmt.Println("ending worker", k)
+				killHB <- "end"
+				return
+			}
+			if tasks[0] == "m" {
+				
+				if indivModel.NumHiddenLayers > 1{
+					runNN(indivModel, trainingdata, testdata)
+				}
+			}
+			reply <- strconv.Itoa(k) + "_" +strconv.Itoa(indivModel.ModelID)
+		default:
 		}
-		if tasks[0] == "m" {
-			// fmt.Print("started task")
-			runNN(indivModel, trainingdata, testdata)
-		}
-		reply <- strconv.Itoa(k) + "_" +strconv.Itoa(indivModel.ModelID)
 	}
+	
 }
 
 // Shuts down worker nodes
@@ -1179,7 +1068,7 @@ func updateTable(index int, hbtable [][]int64, counter int, hb1 []chan [][]int64
 	if prev < 0 {
 		prev = numWorkers + 2
 	}
-	if next > numWorkers+2 {
+	if next > numWorkers + 2 {
 		next = 0
 	}
 
@@ -1228,6 +1117,7 @@ func updateTable(index int, hbtable [][]int64, counter int, hb1 []chan [][]int64
 		}
 	}
 	now := time.Now().Unix() // current local time
+	// fmt.Println(index, " temp ", temp, "hbtable ", hbtable)
 	temp[index][0] = hbtable[index][0] + 1
 	temp[index][1] = now
 	// send table
@@ -1241,6 +1131,7 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan str
 	now := time.Now().Unix() // current local time
 	counter := 0
 	hbtable := make([][]int64, numWorkers+3)
+	// fmt.Println(numWorkers)
 	// initialize hbtable
 	for i := 0; i < numWorkers+3; i++ {
 		hbtable[i] = make([]int64, 2)
@@ -1249,7 +1140,7 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan str
 	}
 
 	for {
-		fmt.Print("w hb ")
+		// fmt.Print("whb", k)
 		time.Sleep(100 * time.Millisecond)
 		hbtable = updateTable(k, hbtable, counter, hb1, hb2)
 		counter++
@@ -1311,16 +1202,15 @@ func masterHeartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, corpses 
 		corpses <- deadWorkers
 		counter++
 	}
-	fmt.Println("master heartbeat ended")
 }
 
 // Shadow Master Node
 func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64, masterID int, selfID int, mrData MasterData, kill chan string) {
 	// replicate logs to two shadowmasters that monitor if the master dies
 	logs := make([]string, 0)
-	//killHB := make(chan string, 3)
+	killHB := make(chan string, 3)
 	var isMasterDead = make(chan bool, 1)
-	//go shadowHeartbeat(hb1, hb2, masterID, isMasterDead, selfID, killHB)
+	go shadowHeartbeat(hb1, hb2, masterID, isMasterDead, selfID, killHB)
 	masterNotDead := true
 
 	for masterNotDead {
@@ -1344,7 +1234,423 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 				// cleanup
 				currentStep = "step end"
 				mrData.log = append(mrData.log, currentStep)
-				//killHB <- "kill"
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep)
+
+			} else if currentStep == "step cleanup" {
+				// cleanup
+				currentStep = "step end"
+				mrData.log = append(mrData.log, currentStep)
+				killHB <- "kill"
 				return
 			}
 		case isDead := <-isMasterDead:
