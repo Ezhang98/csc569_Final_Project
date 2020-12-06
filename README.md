@@ -23,5 +23,7 @@ Notes:
 
 
 Running instructions
+
 go run App.go 
+
     - Launches the User Interface to select Data Sets and set hyperparameters to run Neural Network
