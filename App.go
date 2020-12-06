@@ -499,7 +499,7 @@ func makeToolbar2() ui.Control {
 					s := fmt.Sprintf("%s Results - ", generateLabel((i*7)+j))
 					resList[(i*7)+j] = ui.NewLabel(s)
 					results.Append(resList[(i*7)+j],
-						0, ((i+1)*7)+j, 1, 1,
+						0, ((i+1)*7)+j, 1, 2,
 						false, ui.AlignFill, false, ui.AlignFill)
 				}
 			}
@@ -523,7 +523,7 @@ func makeToolbar2() ui.Control {
 				s := fmt.Sprintf("%s Results - ", generateLabel((windowData.ModelCount*7)+j))
 				resList[(windowData.ModelCount*7)+j] = ui.NewLabel(s)
 				results.Append(resList[(windowData.ModelCount*7)+j],
-					0, ((windowData.ModelCount+1)*7)+j, 1, 1,
+					0, ((windowData.ModelCount+1)*7)+j, 1, 2,
 					false, ui.AlignFill, false, ui.AlignFill)
 			}
 			modelCount++
@@ -688,23 +688,23 @@ func parseCSV(path string) [][][]float64 {
 // index 1
 
 func generateLabel(id int) string {
-	num1 := id / 7
+	num1 := (id / 7) + 1
 	num2 := id % 7
 	s := ""
 	if num2 == 0 {
-		s = fmt.Sprintf("Model %d Default", num1)
+		s = fmt.Sprintf("#%d Default", num1)
 	} else if num2 == 1 {
-		s = fmt.Sprintf("Model %d Double Epoch", num1)
+		s = fmt.Sprintf("#%d Double Epoch", num1)
 	} else if num2 == 2 {
-		s = fmt.Sprintf("Model %d Half Epoch", num1)
+		s = fmt.Sprintf("#%d Half Epoch", num1)
 	} else if num2 == 3 {
-		s = fmt.Sprintf("Model %d Double Learning Rate", num1)
+		s = fmt.Sprintf("#%d Double Learning Rate", num1)
 	} else if num2 == 4 {
-		s = fmt.Sprintf("Model %d Half Learning Rate", num1)
+		s = fmt.Sprintf("#%d Half Learning Rate", num1)
 	} else if num2 == 5 {
-		s = fmt.Sprintf("Model %d Double Momentum", num1)
+		s = fmt.Sprintf("#%d Double Momentum", num1)
 	} else if num2 == 6 {
-		s = fmt.Sprintf("Model %d Half Momentum", num1)
+		s = fmt.Sprintf("#%d Half Momentum", num1)
 	}
 	return s
 }
@@ -723,7 +723,7 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	timer := time.Now()
 	nn.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
 	s := fmt.Sprintf("%s Results - ", generateLabel(m.ModelID))
-	runtime := fmt.Sprintf("Runtime: %.5f seconds, ", time.Since(timer).Seconds())
+	runtime := fmt.Sprintf("Runtime: %.5f s, ", time.Since(timer).Seconds())
 
 	// Predict
 	totalcorrect := 0.0
@@ -733,7 +733,7 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 		}
 	}
 
-	acc := fmt.Sprintf("Accuracy: %.2f percent", totalcorrect/float64(len(test))*100.0)
+	acc := fmt.Sprintf("Acc: %.2f%%", totalcorrect/float64(len(test))*100.0)
 	s = s + runtime + acc
 
 	fmt.Println(s)
@@ -1031,7 +1031,7 @@ func distributeTasks(mrData MasterData) MasterData {
 			default:
 			}
 		}
-		fmt.Println(mrData.working)
+		// fmt.Println(mrData.working)
 		// checks that all models have completed
 		if count >= len(mrData.models) {
 			check := true
@@ -1191,7 +1191,7 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan str
 	}
 
 	for {
-		fmt.Print("whb", k)
+		// fmt.Print("whb", k)
 		time.Sleep(100 * time.Millisecond)
 		hbtable = updateTable(k, hbtable, counter, hb1, hb2)
 		counter++
