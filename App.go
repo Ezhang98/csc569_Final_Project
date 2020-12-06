@@ -843,6 +843,11 @@ func launchServers(numW int) {
 		}
 	}
 
+	for i:=0 ; i < len(mrData.models); i ++{
+		printModelParam(mrData.models[i])
+	}
+	return
+
 	// example
 	// for i := 0; i < 4; i ++{
 	// 	var newModel ModelConfig
@@ -1006,7 +1011,7 @@ func distributeTasks(mrData MasterData) MasterData {
 			default:
 			}
 		}
-		// fmt.Println(mrData.working)
+		fmt.Println(mrData.working)
 		// checks that all models have completed
 		if count >= len(mrData.models) {
 			check := true
@@ -1034,11 +1039,11 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 	var indivModel ModelConfig
 	trainingdata = <-train
 	testdata = <-test
-	fmt.Print("block", k)
+	// fmt.Print("worker", k)
 	indivModel = <-frommaster
 	
 	for {
-		fmt.Print("loop", k)
+		// fmt.Print("loop", k)
 		select {
 		case trainingdata = <-train:
 			continue
