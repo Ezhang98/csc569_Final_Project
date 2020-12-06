@@ -13,3 +13,15 @@ Our system consists of two main components: a simple user interface for users to
 - Manage membership using Paxos to replicate processes across the servers and will select the fastest process. 
 - Customizable configuration file to specify which models and hyperparameters a user prefers to use. The user should be able to either create a new configuration using the client program or provide a configuration file for the distributed system to run. 
 - The output of the application would be a list of models ranked by validation and accuracy.
+- Progress bar illustrates running the distribution and training  of the Neural Networks. Upon completion of tasks, bar stops. 
+
+Notes:
+- Currently only the model Neural Network has been implemented
+- When the UI first loads, in order to load parameters, you must open the model type dropdown and reselect Neural Network
+- Import config works with any of the samples or test files in the configs directory
+- On Mac, the results section cuts off but on windows it shows the full text. 
+
+
+Running instructions
+go run App.go 
+    - Launches the User Interface to select Data Sets and set hyperparameters to run Neural Network

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -37,9 +36,7 @@ type ModelConfig struct {
 }
 
 type NeuralNet struct {
-	InputNodes      int
 	NumHiddenLayers int
-	OutputNodes     int
 	NumEpochs       int
 	LearningRate    float64
 	Momentum        float64
@@ -61,6 +58,7 @@ var models []ui.Control = make([]ui.Control, 5)
 var windowData UIWindow
 var results *ui.Grid
 var resList []*ui.Label = make([]*ui.Label, 35)
+var pbar *ui.ProgressBar
 
 func makeModelParam(m ModelConfig) ui.Control {
 	hbox := ui.NewHorizontalBox()
@@ -100,24 +98,6 @@ func makeModelParam(m ModelConfig) ui.Control {
 				0, 1, 1, 1,
 				false, ui.AlignFill, false, ui.AlignFill)
 
-			// InputNodes   	int
-			// NumHiddenLayers 	int
-			// OutputNodes		int
-			// NumEpochs		int
-			// LearningRate	float64
-			// Momentum		float64
-
-			// # of input nodes
-			inputNodes := ui.NewSpinbox(0, 10000)
-			inputNodes.OnChanged(func(*ui.Spinbox) {
-				windowData.Models[m.ModelID].InputNodes = inputNodes.Value()
-			})
-
-			form1 := ui.NewForm()
-			form1.SetPadded(true)
-			hbox1.Append(form1, false)
-			form1.Append("# Input Nodes", inputNodes, false)
-
 			// # of hidden layers
 			layers := ui.NewSpinbox(0, 10000)
 			layers.OnChanged(func(*ui.Spinbox) {
@@ -128,17 +108,6 @@ func makeModelParam(m ModelConfig) ui.Control {
 			form2.SetPadded(true)
 			hbox1.Append(form2, false)
 			form2.Append("# Hidden Layers", layers, false)
-
-			// # of output nodes
-			outputNodes := ui.NewSpinbox(0, 10000)
-			outputNodes.OnChanged(func(*ui.Spinbox) {
-				windowData.Models[m.ModelID].OutputNodes = outputNodes.Value()
-			})
-
-			form3 := ui.NewForm()
-			form3.SetPadded(true)
-			hbox1.Append(form3, false)
-			form3.Append("# Output Nodes", outputNodes, false)
 
 			// # of epochs
 			epochs := ui.NewSpinbox(0, 10000)
@@ -190,9 +159,7 @@ func makeModelParam(m ModelConfig) ui.Control {
 			form6.SetPadded(true)
 			hbox1.Append(form6, false)
 			form6.Append("Momentum", momentum, false)
-
 			// end
-
 		} else if s == 1 {
 			windowData.Models[m.ModelID].Name = "Model 2"
 			hbox1 := ui.NewHorizontalBox()
@@ -200,8 +167,8 @@ func makeModelParam(m ModelConfig) ui.Control {
 			grid.Append(hbox1,
 				0, 1, 1, 1,
 				false, ui.AlignFill, false, ui.AlignFill)
-			// layers and learning rate
 
+			// layers and learning rate
 			layers := ui.NewSpinbox(0, 10000)
 			layers.OnChanged(func(*ui.Spinbox) {
 				windowData.Models[m.ModelID].Layers = layers.Value()
@@ -260,18 +227,6 @@ func makeModelParam(m ModelConfig) ui.Control {
 			0, 1, 1, 1,
 			false, ui.AlignFill, false, ui.AlignFill)
 
-		// # of input nodes
-		inputNodes := ui.NewSpinbox(0, 10000)
-		inputNodes.SetValue(windowData.Models[m.ModelID].InputNodes)
-		inputNodes.OnChanged(func(*ui.Spinbox) {
-			windowData.Models[m.ModelID].InputNodes = inputNodes.Value()
-		})
-
-		form1 := ui.NewForm()
-		form1.SetPadded(true)
-		hbox1.Append(form1, false)
-		form1.Append("# Input Nodes", inputNodes, false)
-
 		// # of hidden layers
 		layers := ui.NewSpinbox(0, 10000)
 		layers.SetValue(windowData.Models[m.ModelID].NumHiddenLayers)
@@ -283,18 +238,6 @@ func makeModelParam(m ModelConfig) ui.Control {
 		form2.SetPadded(true)
 		hbox1.Append(form2, false)
 		form2.Append("# Hidden Layers", layers, false)
-
-		// # of output nodes
-		outputNodes := ui.NewSpinbox(0, 10000)
-		outputNodes.SetValue(windowData.Models[m.ModelID].OutputNodes)
-		outputNodes.OnChanged(func(*ui.Spinbox) {
-			windowData.Models[m.ModelID].OutputNodes = outputNodes.Value()
-		})
-
-		form3 := ui.NewForm()
-		form3.SetPadded(true)
-		hbox1.Append(form3, false)
-		form3.Append("# Output Nodes", outputNodes, false)
 
 		// # of epochs
 		epochs := ui.NewSpinbox(0, 10000)
@@ -423,7 +366,7 @@ func generateFromState() *ui.Grid {
 	button.OnClicked(func(*ui.Button) {
 		filename := ui.OpenFile(mainwin)
 		if filename == "" {
-			filename = "(cancelled)"
+			filename = "No File Selected"
 		}
 		entry.SetText(filename)
 		windowData.TrainData = filename
@@ -442,7 +385,7 @@ func generateFromState() *ui.Grid {
 	button1.OnClicked(func(*ui.Button) {
 		filename := ui.OpenFile(mainwin)
 		if filename == "" {
-			filename = "(cancelled)"
+			filename = "No File Selected"
 		}
 		entry1.SetText(filename)
 		windowData.TestData = filename
@@ -471,6 +414,10 @@ func makeToolbar2() ui.Control {
 	msggrid.SetPadded(true)
 	vbox.Append(msggrid, false)
 
+	pbar = ui.NewProgressBar()
+	pbar.SetValue(0)
+	vbox.Append(pbar, false)
+
 	grid := ui.NewGrid()
 	grid.SetPadded(true)
 	vbox.Append(grid, false)
@@ -487,8 +434,8 @@ func makeToolbar2() ui.Control {
 			temp := UIWindow{}
 			_ = json.Unmarshal([]byte(file), &temp)
 			windowData = temp
+			vbox.Delete(3)
 			vbox.Delete(2)
-			vbox.Delete(1)
 			grid = generateFromState()
 			vbox.Append(grid, false)
 			results = ui.NewGrid()
@@ -550,8 +497,9 @@ func makeToolbar2() ui.Control {
 		windowData = temp
 		windowData.Models = make([]ModelConfig, 5)
 		windowData.ModelCount = 0
+		pbar.SetValue(0)
+		vbox.Delete(3)
 		vbox.Delete(2)
-		vbox.Delete(1)
 		grid = generateFromState()
 		vbox.Append(grid, false)
 		results = ui.NewGrid()
@@ -564,8 +512,14 @@ func makeToolbar2() ui.Control {
 
 	button = ui.NewButton("Run Models")
 	button.OnClicked(func(*ui.Button) {
+		for i := 0; i < windowData.ModelCount; i++ {
+			for j := 0; j < 7; j++ {
+				s := fmt.Sprintf("%s Results - ", generateLabel((i*7)+j))
+				resList[(i*7)+j].SetText(s)
+			}
+		}
 		go launchServers(7 * windowData.ModelCount)
-		// runNN()
+		pbar.SetValue(-1)
 	})
 	msggrid.Append(button,
 		4, 0, 1, 1,
@@ -577,10 +531,19 @@ func makeToolbar2() ui.Control {
 	button.OnClicked(func(*ui.Button) {
 		filename := ui.OpenFile(mainwin)
 		if filename == "" {
-			filename = "(cancelled)"
+			filename = "No File Selected"
 		}
-		entry.SetText(filename)
-		windowData.TrainData = filename
+		x := parseCSV(filename)
+		if len(x) != 0 {
+			entry.SetText(filename)
+			windowData.TrainData = filename
+		} else {
+			ui.MsgBoxError(mainwin,
+				"Error",
+				"CSV not provided or improperly formatted.")
+			entry.SetText("No File Selected")
+		}
+
 	})
 	grid.Append(button,
 		0, 0, 1, 1,
@@ -595,10 +558,18 @@ func makeToolbar2() ui.Control {
 	button1.OnClicked(func(*ui.Button) {
 		filename := ui.OpenFile(mainwin)
 		if filename == "" {
-			filename = "(cancelled)"
+			filename = "No File Selected"
 		}
-		entry1.SetText(filename)
-		windowData.TestData = filename
+		x := parseCSV(filename)
+		if len(x) != 0 {
+			entry1.SetText(filename)
+			windowData.TestData = filename
+		} else {
+			ui.MsgBoxError(mainwin,
+				"Error",
+				"CSV not provided or improperly formatted.")
+			entry1.SetText("No File Selected")
+		}
 	})
 	grid.Append(button1,
 		0, 1, 1, 1,
@@ -611,7 +582,7 @@ func makeToolbar2() ui.Control {
 }
 
 func setupUI() {
-	mainwin = ui.NewWindow("libui Control Gallery", 1800, 900, true)
+	mainwin = ui.NewWindow("Distributed Neural Network", 1200, 900, true)
 	windowData.Models = make([]ModelConfig, 5)
 	windowData.ModelCount = 0
 	mainwin.OnClosing(func(*ui.Window) bool {
@@ -630,15 +601,14 @@ func setupUI() {
 
 func parseCSV(path string) [][][]float64 {
 	data := make([][][]float64, 0)
+	x := make([][][]float64, 0)
 
 	// Open the file
-
-	// s := strings.Split(path, "\\")
-	// fixedPath := "../datasets/" + s[len(s)-1]
-
 	csvfile, err := os.Open(path)
 	if err != nil {
-		log.Fatalln("Couldn't open the csv file", err)
+		// log.Fatalln("Couldn't open the csv file", err)
+		fmt.Println("Could not open csv:", path)
+		return x
 	}
 
 	r := csv.NewReader(csvfile)
@@ -671,7 +641,9 @@ func parseCSV(path string) [][][]float64 {
 			break
 		}
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println("CSV could not be read")
+			return x
+			// log.Fatal(err)
 		}
 		index++
 	}
@@ -706,7 +678,7 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	for j := 0; j < m.NumHiddenLayers; j++ {
 		hidden[j] = 32
 	}
-	nn := gonet.New(len(train[0][0]), hidden, 10, true)
+	nn := gonet.New(len(train[0][0]), hidden, len(train[0][1]), true)
 
 	// Train the network, use epochs, learning rate, and momentum factor from UI
 	timer := time.Now()
@@ -722,7 +694,7 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 		}
 	}
 
-	acc := fmt.Sprintf("Acc: %.2f%%", totalcorrect/float64(len(test))*100.0)
+	acc := fmt.Sprintf("Accuracy: %.2f%%", totalcorrect/float64(len(test))*100.0)
 	s = s + runtime + acc
 
 	fmt.Println(s)
@@ -812,6 +784,7 @@ func launchServers(numW int) {
 
 	// initialize shadowMasters
 	numShadowMasters := 2
+
 	// channel shadowMaster <- master : replication
 	mrData.toShadowMasters = make([]chan string, numShadowMasters)
 	for j := 0; j < numShadowMasters; j++ {
@@ -869,6 +842,9 @@ func launchServers(numW int) {
 		select {
 		case reply := <-endrun:
 			if reply == "end" {
+				ui.QueueMain(func() {
+					pbar.SetValue(0)
+				})
 				break
 			}
 		}
@@ -919,8 +895,19 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 			// manage the distributeTasks step
 			trainingdata := parseCSV(windowData.TrainData)
 			testdata := parseCSV(windowData.TestData)
-			// trainingdata := parseCSV("datasets/mnist_train_short.csv")
-			// testdata := parseCSV("datasets/mnist_train_short.csv")
+			if len(trainingdata) == 0 || len(testdata) == 0 {
+				ui.MsgBoxError(mainwin,
+					"Error",
+					"CSV not provided or improperly formatted.")
+				ui.QueueMain(func() {
+					pbar.SetValue(0)
+				})
+				currentStep = "step cleanup"
+				mrData.log = append(mrData.log, currentStep) //appends master distributeTasks step to log
+				mrData.toShadowMasters[0] <- currentStep     //sends distributeTasks message to first Shadow Master channel
+				mrData.toShadowMasters[1] <- currentStep     //sends distributeTasks message to second Shadow Master channel
+				break
+			}
 			for k := 0; k < mrData.numWorkers; k++ {
 				mrData.training[k] <- trainingdata
 				mrData.test[k] <- testdata
@@ -1037,7 +1024,6 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 				return
 			}
 			if tasks[0] == "m" {
-
 				if indivModel.NumHiddenLayers > 1 {
 					runNN(indivModel, trainingdata, testdata)
 				}
@@ -1046,19 +1032,6 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 		default:
 		}
 	}
-
-}
-
-// Shuts down worker nodes
-func cleanup(mrData MasterData) MasterData {
-	// Check that all workers shutdown
-	for i := 0; i < mrData.numWorkers; i++ {
-		mrData.commands[i] <- "end_0_" + strconv.Itoa(i)
-		msg := <-mrData.replies[i]
-		num, _ := strconv.Atoi(msg)
-		mrData.working[num] = ""
-	}
-	return mrData
 }
 
 // Helper function to find max
