@@ -19,7 +19,6 @@ import (
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
 	"github.com/dathoangnd/gonet"
-
 )
 
 type UIWindow struct {
@@ -497,7 +496,7 @@ func makeToolbar2() ui.Control {
 			vbox.Append(results, false)
 			for i := 0; i < windowData.ModelCount; i++ {
 				for j := 0; j < 7; j++ {
-					s := fmt.Sprintf("Model %d Results - ", (i*7)+j)
+					s := fmt.Sprintf("%s Results - ", generateLabel((i*7)+j))
 					resList[(i*7)+j] = ui.NewLabel(s)
 					results.Append(resList[(i*7)+j],
 						0, ((i+1)*7)+j, 1, 1,
@@ -521,7 +520,7 @@ func makeToolbar2() ui.Control {
 				0, modelCount+2, 2, 1,
 				true, ui.AlignFill, false, ui.AlignFill)
 			for j := 0; j < 7; j++ {
-				s := fmt.Sprintf("Model %d Results - ", (windowData.ModelCount*7)+j)
+				s := fmt.Sprintf("%s Results - ", generateLabel((windowData.ModelCount*7)+j))
 				resList[(windowData.ModelCount*7)+j] = ui.NewLabel(s)
 				results.Append(resList[(windowData.ModelCount*7)+j],
 					0, ((windowData.ModelCount+1)*7)+j, 1, 1,
@@ -688,6 +687,28 @@ func parseCSV(path string) [][][]float64 {
 // index 0 [[28x28], expected_value]
 // index 1
 
+func generateLabel(id int) string {
+	num1 := id / 7
+	num2 := id % 7
+	s := ""
+	if num2 == 0 {
+		s = fmt.Sprintf("Model %d Default", num1)
+	} else if num2 == 1 {
+		s = fmt.Sprintf("Model %d Double Epoch", num1)
+	} else if num2 == 2 {
+		s = fmt.Sprintf("Model %d Half Epoch", num1)
+	} else if num2 == 3 {
+		s = fmt.Sprintf("Model %d Double Learning Rate", num1)
+	} else if num2 == 4 {
+		s = fmt.Sprintf("Model %d Half Learning Rate", num1)
+	} else if num2 == 5 {
+		s = fmt.Sprintf("Model %d Double Momentum", num1)
+	} else if num2 == 6 {
+		s = fmt.Sprintf("Model %d Half Momentum", num1)
+	}
+	return s
+}
+
 func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	hidden := make([]int, m.NumHiddenLayers)
 	for j := 0; j < m.NumHiddenLayers; j++ {
@@ -701,7 +722,7 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	// Enable debug mode to log learning error every 1000 iterations
 	timer := time.Now()
 	nn.Train(train, m.NumEpochs, m.LearningRate, m.Momentum, true)
-	s := fmt.Sprintf("Model %d Results - ", m.ModelID)
+	s := fmt.Sprintf("%s Results - ", generateLabel(m.ModelID))
 	runtime := fmt.Sprintf("Runtime: %.5f seconds, ", time.Since(timer).Seconds())
 
 	// Predict
@@ -719,7 +740,6 @@ func runNN(m ModelConfig, train [][][]float64, test [][][]float64) {
 	ui.QueueMain(func() {
 		resList[m.ModelID].SetText(s)
 	})
-
 
 }
 
@@ -809,36 +829,38 @@ func launchServers(numW int) {
 
 	for i := 0; i < windowData.ModelCount; i++ {
 		if windowData.Models[i].Name != "" {
-			mrData.models = append(mrData.models, windowData.Models[i])
+			vanilla := windowData.Models[i]
+			vanilla.ModelID = i * 7
+			mrData.models = append(mrData.models, vanilla)
 
 			doubleEpoch := windowData.Models[i]
 			doubleEpoch.NumEpochs *= 2
-			doubleEpoch.ModelID = 1
+			doubleEpoch.ModelID = (i * 7) + 1
 			mrData.models = append(mrData.models, doubleEpoch)
 
 			halfEpoch := windowData.Models[i]
 			halfEpoch.NumEpochs /= 2
-			halfEpoch.ModelID = 2
+			halfEpoch.ModelID = (i * 7) + 2
 			mrData.models = append(mrData.models, halfEpoch)
 
 			doubleLearningRate := windowData.Models[i]
 			doubleLearningRate.LearningRate *= 2
-			doubleLearningRate.ModelID = 3
+			doubleLearningRate.ModelID = (i * 7) + 3
 			mrData.models = append(mrData.models, doubleLearningRate)
 
 			halfLearningRate := windowData.Models[i]
 			halfLearningRate.LearningRate /= 2
-			halfLearningRate.ModelID = 4
+			halfLearningRate.ModelID = (i * 7) + 4
 			mrData.models = append(mrData.models, halfLearningRate)
 
 			doubleMomentum := windowData.Models[i]
 			doubleMomentum.Momentum *= 2
-			doubleMomentum.ModelID = 5
+			doubleMomentum.ModelID = (i * 7) + 5
 			mrData.models = append(mrData.models, doubleMomentum)
 
 			halfMomentum := windowData.Models[i]
 			halfMomentum.Momentum /= 2
-			halfMomentum.ModelID = 6
+			halfMomentum.ModelID = (i * 7) + 6
 			mrData.models = append(mrData.models, halfMomentum)
 		}
 	}
@@ -867,7 +889,7 @@ func launchServers(numW int) {
 		select {
 		case reply := <-endrun:
 			// fmt.Println("end main thread")
-			if reply == "end"{
+			if reply == "end" {
 				break
 			}
 		}
@@ -939,13 +961,12 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 		} else if currentStep == "step cleanup" {
 			// cleanup workers who should now be done with all tasks
 			// mrData = cleanup(mrData)
-			
+
 			currentStep = "step end"
 			mrData.log = append(mrData.log, currentStep) //appends end message to log
 			mrData.toShadowMasters[0] <- currentStep     //sends end message to first Shadow Master channel
 			mrData.toShadowMasters[1] <- currentStep     //sends end message to second Shadow Master channel
-			
-			
+
 			killHB <- "die"
 			for i := 0; i < mrData.numWorkers; i++ {
 				mrData.commands[i] <- "end"
@@ -1049,16 +1070,16 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 				return
 			}
 			if tasks[0] == "m" {
-				
-				if indivModel.NumHiddenLayers > 1{
+
+				if indivModel.NumHiddenLayers > 1 {
 					runNN(indivModel, trainingdata, testdata)
 				}
 			}
-			reply <- strconv.Itoa(k) + "_" +strconv.Itoa(indivModel.ModelID)
+			reply <- strconv.Itoa(k) + "_" + strconv.Itoa(indivModel.ModelID)
 		default:
 		}
 	}
-	
+
 }
 
 // Shuts down worker nodes
@@ -1093,7 +1114,7 @@ func updateTable(index int, hbtable [][]int64, counter int, hb1 []chan [][]int64
 	if prev < 0 {
 		prev = numWorkers + 2
 	}
-	if next > numWorkers + 2 {
+	if next > numWorkers+2 {
 		next = 0
 	}
 
@@ -1260,11 +1281,11 @@ func shadowMaster(copier chan string, hb1 []chan [][]int64, hb2 []chan [][]int64
 				// cleanup
 				currentStep = "step end"
 				mrData.log = append(mrData.log, currentStep)
-				
+
 				killHB <- "kill"
 				// fmt.Println("shadow", selfID, "ending")
 				return
-			} 
+			}
 		case isDead := <-isMasterDead:
 			masterNotDead = isDead
 		default:
