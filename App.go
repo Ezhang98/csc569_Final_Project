@@ -893,7 +893,7 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 	go masterHeartbeat(hb1, hb2, mrData.numWorkers, mrData.corpses, killHB, killMaster, mrData)
 
 	for {
-		// fmt.Println("Master running: ", currentStep) // print in UI
+		fmt.Println("Master running: ", currentStep) // print in UI
 		if currentStep == "step start" {
 			// If master died partway through launching workers, find the last logged k and start from there
 			k := 0
@@ -948,6 +948,7 @@ func master(mrData MasterData, hb1 []chan [][]int64, hb2 []chan [][]int64, log [
 			
 			killHB <- "die"
 			for i := 0; i < mrData.numWorkers; i++ {
+				fmt.Println("try kill worker", i)
 				mrData.commands[i] <- "end"
 			}
 			end <- "end"
@@ -1033,8 +1034,11 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 	var indivModel ModelConfig
 	trainingdata = <-train
 	testdata = <-test
+	fmt.Print("block?", k)
 	indivModel = <-frommaster
+	
 	for {
+		fmt.Print("loop", k)
 		select {
 		case trainingdata = <-train:
 			continue
@@ -1049,7 +1053,6 @@ func worker(train chan [][][]float64, test chan [][][]float64, frommaster chan M
 				return
 			}
 			if tasks[0] == "m" {
-				
 				if indivModel.NumHiddenLayers > 1{
 					runNN(indivModel, trainingdata, testdata)
 				}
@@ -1165,7 +1168,7 @@ func heartbeat(hb1 []chan [][]int64, hb2 []chan [][]int64, k int, endHB chan str
 	}
 
 	for {
-		fmt.Print("whb", k)
+		// fmt.Print("whb", k)
 		time.Sleep(100 * time.Millisecond)
 		hbtable = updateTable(k, hbtable, counter, hb1, hb2)
 		counter++
